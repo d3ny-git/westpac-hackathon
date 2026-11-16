@@ -78,15 +78,8 @@ with st.sidebar:
         st.rerun()
     st.divider()
     submitted = store.count() > 0 and load_fixtures.hero_form_submitted()
-    if st.button("📝 Simulate: hero submits hardship form", width="stretch", key="hero_form",
-                 disabled=store.count() == 0 or submitted,
-                 help="Stand-in for Node B's mock input form (B5): writes B's mock output for hero "
-                      "(interaction score 50 + a 21-day hardship response promise)"):
-        load_fixtures.submit_hero_form()
-        st.toast("Hero submitted the hardship form")
-        st.rerun()
-    st.caption("✅ Hero's form is in the ledger" if submitted else
-               "Stand-in for Node B's form until B5 is built (SPEC steps 6–7).")
+    st.caption("✅ Hero's hardship form is in the ledger" if submitted else
+               "SPEC step 6: hero submits a hardship form on the **B page** (Node B's mock input form).")
 
 if store.count() == 0:
     st.warning("The ledger is empty. Use **Load demo data** in the sidebar "
