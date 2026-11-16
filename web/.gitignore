@@ -1,0 +1,6 @@
+# Installed and generated files for the React UI (rebuilt by npm ci / npm run build / npx playwright test)
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.tsbuildinfo
