@@ -1,0 +1,30 @@
+[
+  {
+    "customer_id": "100200301",
+    "full_name": "Jane Citizen",
+    "email": "jane.citizen@example.com",
+    "phone": "0491 570 156",
+    "staff_id": "",
+    "staff_name": "",
+    "date": "2026-11-10",
+    "channel": "FORM",
+    "type": "HARDSHIP_FORM",
+    "form_status": "SUBMITTED",
+    "callback_due": "",
+    "text": "Name: Jane Citizen. DOB 14/03/1988. Phone 0491 570 156. My employer has stopped paying me and my shifts are gone. I need help with my home loan repayments for the next 3 months."
+  },
+  {
+    "customer_id": "100200307",
+    "full_name": "Tom Baker",
+    "email": "tom.baker@example.com",
+    "phone": "0491 570 313",
+    "staff_id": "W10587",
+    "staff_name": "Ben Carter",
+    "date": "2026-11-12",
+    "channel": "CHAT",
+    "type": "GENERAL",
+    "form_status": "",
+    "callback_due": "",
+    "text": "Hi this is Tom Baker, I'm struggling to pay my Afterpay and Zip plans this month, can you email me at tom.baker@example.com?"
+  }
+]

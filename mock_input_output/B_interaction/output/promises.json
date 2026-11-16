@@ -1,0 +1,42 @@
+[
+  {
+    "customer_token": "cust_3d6abe",
+    "promise_id": "P-0001",
+    "promise_type": "HARDSHIP_RESPONSE",
+    "description": "Respond to hardship request within 21 days",
+    "made_by": "SYSTEM",
+    "made_via": "FORM",
+    "due": "2026-11-23T17:00:00",
+    "status": "OPEN"
+  },
+  {
+    "customer_token": "cust_af4200",
+    "promise_id": "P-0002",
+    "promise_type": "CALLBACK",
+    "description": "Hardship team to call back",
+    "made_by": "staff_b38",
+    "made_via": "CALL",
+    "due": "2026-11-18T14:00:00",
+    "status": "OPEN"
+  },
+  {
+    "customer_token": "cust_af4200",
+    "promise_id": "P-0003",
+    "promise_type": "HARDSHIP_RESPONSE",
+    "description": "Respond to hardship request within 21 days",
+    "made_by": "SYSTEM",
+    "made_via": "FORM",
+    "due": "2026-12-01T17:00:00",
+    "status": "OPEN"
+  },
+  {
+    "customer_token": "cust_2c7c98",
+    "promise_id": "P-0004",
+    "promise_type": "CALLBACK",
+    "description": "Hardship team to call back",
+    "made_by": "staff_9bb",
+    "made_via": "CALL",
+    "due": "2026-11-14T10:00:00",
+    "status": "OPEN"
+  }
+]

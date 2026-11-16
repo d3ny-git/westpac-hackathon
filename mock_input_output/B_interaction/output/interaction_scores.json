@@ -1,0 +1,78 @@
+[
+  {
+    "customer_token": "cust_af4200",
+    "source": "INTERACTION",
+    "score": 50,
+    "band": "MODERATE",
+    "reasons": [
+      "HARDSHIP_FORM",
+      "REPEAT_CONTACT"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_16dea0",
+    "source": "INTERACTION",
+    "score": 0,
+    "band": "LOW",
+    "reasons": [],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_bb4b75",
+    "source": "INTERACTION",
+    "score": 50,
+    "band": "MODERATE",
+    "reasons": [
+      "HARDSHIP_KEYWORDS",
+      "REPEAT_CONTACT",
+      "ABANDONED_FORM"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_3d6abe",
+    "source": "INTERACTION",
+    "score": 65,
+    "band": "HIGH",
+    "reasons": [
+      "HARDSHIP_FORM",
+      "HARDSHIP_KEYWORDS"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_a26449",
+    "source": "INTERACTION",
+    "score": 0,
+    "band": "LOW",
+    "reasons": [],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_2c7c98",
+    "source": "INTERACTION",
+    "score": 0,
+    "band": "LOW",
+    "reasons": [],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_9f4bf9",
+    "source": "INTERACTION",
+    "score": 25,
+    "band": "LOW",
+    "reasons": [
+      "HARDSHIP_KEYWORDS"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_5e4a19",
+    "source": "INTERACTION",
+    "score": 0,
+    "band": "LOW",
+    "reasons": [],
+    "timestamp": "2026-11-16T10:00:00"
+  }
+]

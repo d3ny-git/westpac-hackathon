@@ -1,0 +1,94 @@
+[
+  {
+    "customer_token": "cust_af4200",
+    "source": "ACCOUNT",
+    "score": 63,
+    "band": "HIGH",
+    "reasons": [
+      "SALARY_STOPPED",
+      "DISHONOUR",
+      "OVERDRAWN",
+      "BNPL_STACKING"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_16dea0",
+    "source": "ACCOUNT",
+    "score": 0,
+    "band": "LOW",
+    "reasons": [],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_bb4b75",
+    "source": "ACCOUNT",
+    "score": 86,
+    "band": "CRITICAL",
+    "reasons": [
+      "SALARY_STOPPED",
+      "DISHONOUR",
+      "OVERDRAWN",
+      "BNPL_STACKING",
+      "LOAN_ARREARS"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_3d6abe",
+    "source": "ACCOUNT",
+    "score": 61,
+    "band": "HIGH",
+    "reasons": [
+      "SALARY_STOPPED",
+      "DISHONOUR",
+      "OVERDRAWN",
+      "BNPL_STACKING"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_a26449",
+    "source": "ACCOUNT",
+    "score": 60,
+    "band": "HIGH",
+    "reasons": [
+      "SALARY_STOPPED",
+      "OVERDRAWN",
+      "LOAN_ARREARS"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_2c7c98",
+    "source": "ACCOUNT",
+    "score": 30,
+    "band": "MODERATE",
+    "reasons": [
+      "DISHONOUR",
+      "OVERDRAWN",
+      "BNPL_STACKING"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_9f4bf9",
+    "source": "ACCOUNT",
+    "score": 8,
+    "band": "LOW",
+    "reasons": [
+      "BNPL_STACKING"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  },
+  {
+    "customer_token": "cust_5e4a19",
+    "source": "ACCOUNT",
+    "score": 8,
+    "band": "LOW",
+    "reasons": [
+      "OVERDRAWN"
+    ],
+    "timestamp": "2026-11-16T10:00:00"
+  }
+]

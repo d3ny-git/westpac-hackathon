@@ -1,0 +1,11 @@
+customer_id,full_name,email,phone,staff_id,staff_name,date,channel,type,form_status,callback_due,text
+100200301,Jane Citizen,jane.citizen@example.com,0491 570 156,W10587,Ben Carter,2026-11-05,CHAT,GENERAL,,,"Hi it's Jane Citizen, my pay hasn't come through this fortnight, is something wrong with my account ending 1203?"
+100200301,Jane Citizen,jane.citizen@example.com,0491 570 156,W10442,Rachel Lee,2026-11-07,CALL,CALLBACK_REQUEST,,2026-11-18T14:00:00,Customer Jane Citizen (0491 570 156) asked for someone from the hardship team to call her back about her home loan.
+100200302,Michael Tran,m.tran@example.com,0491 570 006,W10587,Ben Carter,2026-10-29,CHAT,GENERAL,,,"Hello, Michael Tran here, how do I update my email to m.tran@example.com on the app?"
+100200303,Priya Sharma,priya.s@example.com,0491 570 157,W10587,Ben Carter,2026-11-03,CHAT,GENERAL,,,This is Priya Sharma. I can't afford my home loan repayment this month and I have Afterpay and Zip due too.
+100200303,Priya Sharma,priya.s@example.com,0491 570 157,,,2026-11-06,FORM,HARDSHIP_FORM,ABANDONED,,"Name: Priya Sharma, DOB 23/11/1991, phone 0491 570 157. Reason for hardship: "
+100200303,Priya Sharma,priya.s@example.com,0491 570 157,W10913,Aisha Rahman,2026-11-09,CALL,GENERAL,,,"Priya Sharma called about a dishonour fee on her account, BSB 032-103 account 610044."
+100200304,Liam O'Connor,liam.oconnor@example.com,0491 570 158,,,2026-11-02,FORM,HARDSHIP_FORM,SUBMITTED,,"Liam O'Connor, liam.oconnor@example.com. I lost my job at the end of October and need to pause my repayments."
+100200305,Sarah Nguyen,sarah.nguyen@example.com,0491 570 159,W10442,Rachel Lee,2026-10-20,CALL,GENERAL,,,Sarah Nguyen asked about the interest rate on her home loan. Call back on 0491 570 159 not required.
+100200306,David Kowalski,d.kowalski@example.com,0491 570 110,W10913,Aisha Rahman,2026-11-11,CALL,CALLBACK_REQUEST,,2026-11-14T10:00:00,"David Kowalski wants a call back about a missed payment, best on 0491 570 110 Friday morning."
+100200308,Emma Wilson,emma.w@example.com,0491 570 737,W10587,Ben Carter,2026-10-25,EMAIL,COMPLAINT,,,"From emma.w@example.com: I was charged twice at Coles on my card, please refund. Emma Wilson, 22 Sample St Hornsby."

@@ -1,0 +1,106 @@
+[
+  {
+    "persona": "hero",
+    "customer_token": "cust_af4200",
+    "account_score": 63,
+    "interaction_score": 50,
+    "account_signals": {
+      "salary_stopped": true,
+      "dishonour": true,
+      "overdrawn_days": 10,
+      "bnpl_providers": 3,
+      "loan_arrears": false
+    }
+  },
+  {
+    "persona": "fine",
+    "customer_token": "cust_16dea0",
+    "account_score": 0,
+    "interaction_score": 0,
+    "account_signals": {
+      "salary_stopped": false,
+      "dishonour": false,
+      "overdrawn_days": 0,
+      "bnpl_providers": 0,
+      "loan_arrears": false
+    }
+  },
+  {
+    "persona": "critical",
+    "customer_token": "cust_bb4b75",
+    "account_score": 86,
+    "interaction_score": 50,
+    "account_signals": {
+      "salary_stopped": true,
+      "dishonour": true,
+      "overdrawn_days": 14,
+      "bnpl_providers": 4,
+      "loan_arrears": true
+    }
+  },
+  {
+    "persona": "open_case",
+    "customer_token": "cust_3d6abe",
+    "account_score": 61,
+    "interaction_score": 65,
+    "account_signals": {
+      "salary_stopped": true,
+      "dishonour": true,
+      "overdrawn_days": 9,
+      "bnpl_providers": 3,
+      "loan_arrears": false
+    }
+  },
+  {
+    "persona": "recent_push",
+    "customer_token": "cust_a26449",
+    "account_score": 60,
+    "interaction_score": 0,
+    "account_signals": {
+      "salary_stopped": true,
+      "dishonour": false,
+      "overdrawn_days": 10,
+      "bnpl_providers": 1,
+      "loan_arrears": true
+    }
+  },
+  {
+    "persona": "late_callback",
+    "customer_token": "cust_2c7c98",
+    "account_score": 30,
+    "interaction_score": 0,
+    "account_signals": {
+      "salary_stopped": false,
+      "dishonour": true,
+      "overdrawn_days": 6,
+      "bnpl_providers": 3,
+      "loan_arrears": false
+    }
+  },
+  {
+    "persona": "steady_bnpl",
+    "customer_token": "cust_9f4bf9",
+    "account_score": 8,
+    "interaction_score": 25,
+    "account_signals": {
+      "salary_stopped": false,
+      "dishonour": false,
+      "overdrawn_days": 0,
+      "bnpl_providers": 3,
+      "loan_arrears": false
+    }
+  },
+  {
+    "persona": "tight_month",
+    "customer_token": "cust_5e4a19",
+    "account_score": 8,
+    "interaction_score": 0,
+    "account_signals": {
+      "salary_stopped": false,
+      "dishonour": false,
+      "overdrawn_days": 4,
+      "bnpl_providers": 0,
+      "loan_arrears": false
+    }
+  }
+]

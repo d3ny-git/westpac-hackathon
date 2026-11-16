@@ -298,12 +298,12 @@ Then write a 3-line summary using only numbers and tokens the tools returned.
 ### Raw data
 `scripts/generate_raw_data.py` (fixed seed) writes `data/raw/transactions_raw.csv` (A's input) and `data/raw/interactions_raw.csv` (B's mock history) with **realistic fake PII**. The names, emails, phones and account numbers are invented, and the text mentions names and numbers. This is exactly what the sanitizer must remove. B's live input comes from the mock form on top of that history.
 
-Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator writes `fixtures/personas.json` (persona name → token), and tests look customers up by persona name.
+Tokens come from HMAC, so they won't literally be `cust_8f2a91`. `mock_input_output/personas.json` maps persona name → token → expected scores (made with `TOKEN_SECRET=mock-demo-secret`), and tests look customers up by persona name. See `mock_input_output/README.md` for the exact rules and expected results.
 
-### Personas (6 scripted + about 10 random)
+### Personas (8 customers: 6 scripted + 2 extra, all in `mock_input_output/`)
 | Persona | Story | What it exercises |
 |---|---|---|
-| `hero` | SPEC story: salary stopped, dishonour, 3 BNPL, 10 overdrawn days, later a hardship form | A=63, B=50, C=75, Quiet Help → meeting, P2, P3 |
+| `hero` | SPEC story: salary stopped, dishonour, 3 BNPL, 10 overdrawn days, later a hardship form | A=63, B=0 → 50 after the form, C=75, Quiet Help → meeting, P2, P3 |
 | `fine` | Nothing wrong | LOW, nothing happens |
 | `critical` | Everything bad | CRITICAL, P4 blocks credit offer |
 | `open_case` | HIGH, hardship case already open | Excluded from Quiet Help |
@@ -313,8 +313,8 @@ Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator w
 ### Fixtures: each person builds against these until the real upstream node is ready
 | File | Lets this node start early | Pretends to be |
 |---|---|---|
-| `fixtures/clean_transactions.csv`, `clean_interactions.csv` | A, B (before the sanitizer is done) | sanitize.py output |
-| `fixtures/scores.json`, `promises.json` | C | A + B output |
+| `mock_input_output/A_account/`, `B_interaction/` (input + expected output) | A, B (golden tests for sanitize and rules) | raw bank data → correct answers |
+| `mock_input_output/*/output/*_scores.json`, `promises.json` | C, D | A + B output |
 | `fixtures/ledger_seed.json` | D, E | C |
 | `fixtures/recommendations.json` | E | D |
 | `fixtures/action_requests.json` | D | staff, collections and scam callers |
