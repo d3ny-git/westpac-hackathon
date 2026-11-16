@@ -1,0 +1,9 @@
+# Customer Guardian dependencies. Install with: pip install -r requirements.txt
+openai>=1.40          # OpenRouter client (shared/llm.py)
+python-dotenv>=1.0    # reads .env
+mcp>=1.2              # FastMCP server + client (server.py, agent.py)
+pydantic>=2.0         # message schemas (shared/schemas.py)
+pandas>=2.0           # CSV handling (sanitize.py, nodes A/B)
+pyyaml>=6.0           # runbook front matter (agent.py)
+streamlit>=1.35       # UI
+pytest>=8.0           # tests

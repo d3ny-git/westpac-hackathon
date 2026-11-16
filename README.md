@@ -13,7 +13,8 @@ Built in Python with one FastMCP server, an OpenRouter LLM, a Streamlit UI and S
 | What | State |
 |---|---|
 | Plan, docs, mock data | Done (`docs/`, `mock_input_output/`) |
-| Phase 0 skeleton: `shared/`, ledger store, `shared/llm.py`, `agent.py`, `server.py` | Next (Owner-CD) |
+| `shared/llm.py` (AI gateway) + `shared/pii_guard.py` (PII check) | Done, with tests (`tests/test_llm.py`) |
+| Rest of Phase 0: schemas, config, ledger store, `agent.py`, `server.py` | Next (Owner-CD) |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -69,7 +70,7 @@ The AI is an **operator with a checklist**. It never calculates a score, reads c
 | Area | Owner |
 |---|---|
 | A: Account | Owner-A |
-| B: Interactions (incl. `shared/pii_guard.py`) | Owner-B |
+| B: Interactions | Owner-B |
 | C: Ledger + D: Policy Agent + shared setup incl. `shared/llm.py` and `agent.py` (tech lead) | Owner-CD |
 | E: Actions (incl. home page and demo reset) | Owner-E |
 
@@ -119,6 +120,8 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 # create a .env file with the values Owner-CD shares with the team (not stored in GitHub):
 #   OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
+python -m shared.llm             # check your OpenRouter key + model work (works today)
+python -m pytest                 # run the tests (works today)
 python scripts/reset_demo.py     # generate -> sanitize -> run A and B workflows (--no-ai)
 streamlit run ui/app.py
 ```
