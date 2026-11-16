@@ -3,12 +3,14 @@
     streamlit run ui/pages/B.py
 
 Shows:
-  1. The mock input form: a customer calls, chats, emails or fills in a form. Type it in as it
+  1. Run Node B for all customers: score everyone from their interaction history (after
+     "Start empty", this is how B's scores and promises get into the ledger)
+  2. The mock input form: a customer calls, chats, emails or fills in a form. Type it in as it
      would really arrive, fake personal information included.
-  2. On submit: what the sanitizer KEPT vs THREW AWAY (the text becomes keyword flags, then is
+  3. On submit: what the sanitizer KEPT vs THREW AWAY (the text becomes keyword flags, then is
      deleted), then Node B's workflow (runbooks/b_interaction.md) runs for that customer
-  3. The promises the bank has made to that customer, as they now are in the ledger
-  4. All clean interactions (tokens and flags only) and Node B's ledger entries
+  4. The promises the bank has made to that customer, as they now are in the ledger
+  5. All clean interactions (tokens and flags only) and Node B's ledger entries
 
 The raw panels are a LOCAL view for the demo (docs/MCP_PLAN.md §6): raw data never goes through
 MCP or the AI. Node B itself only ever reads the clean data.
@@ -84,8 +86,18 @@ with st.sidebar:
                  help="Raw data -> sanitize -> Node A and Node B -> a fresh ledger (scripts/reset_demo.py)"):
         reset_demo.reset(quiet=True)
         st.session_state.pop("submission", None)
+        st.session_state.pop("everyone", None)
         st.toast("Demo reset: A and B have scored everyone")
         st.rerun()
+    if st.button("🧹 Start empty (A and B not run yet)", width="stretch", key="reset_empty",
+                 help="Sanitize the raw data and start a fresh ledger, but don't run A or B: "
+                      "run them yourself on the A and B pages"):
+        reset_demo.reset(quiet=True, empty=True)
+        st.session_state.pop("submission", None)
+        st.session_state.pop("everyone", None)
+        st.toast("Fresh ledger: now run Node A, then Node B")
+        st.rerun()
+    st.caption("Start empty, then: A page → Run Node A's workflow; B page → Run Node B for all customers.")
 
 if not (clean_dir() / CLEAN_INTERACTIONS_FILE).exists():
     st.warning("There's no clean interaction data yet. Use **Reset demo (real pipeline)** in the sidebar "
@@ -99,8 +111,36 @@ st.session_state.setdefault("f_date", now().date())
 st.session_state.setdefault("f_due_day", now().date() + timedelta(days=2))
 st.session_state.setdefault("f_due_time", time(14, 0))
 
-# ---- 1. The mock input form ----
-st.header("1. Mock input form")
+# ---- 1. Run Node B for everyone ----
+st.header("1. Run Node B for all customers")
+st.caption("Runs `runbooks/b_interaction.md` once per customer in the interaction history: each customer's "
+           "interaction score and the promises the bank made, written to the ledger. Anything already "
+           "there is skipped, so running it twice adds nothing.")
+r1, r2 = st.columns(2)
+everyone_ai = None
+if r1.button("🤖 Run for all customers with the AI", width="stretch", key="all_ai"):
+    everyone_ai = True
+if r2.button("⚙️ Run for all customers without the AI", width="stretch", key="all_no_ai"):
+    everyone_ai = False
+if everyone_ai is not None:
+    with st.spinner("Running Node B's workflow for every customer..."):
+        try:
+            runs = reset_demo.run_node_b_for_everyone(mcp_server(), ai=everyone_ai)
+            st.session_state.everyone = [{
+                "Customer": r.steps[0].args["customer_token"], "Status": r.status,
+                "Score": f"{r.steps[0].output['score']} {r.steps[0].output['band']}",
+                "Score written": "yes" if r.steps[2].output["scores_written"] else "unchanged",
+                "Promises written": ", ".join(r.steps[2].output["promises_written"]) or "–",
+            } for r in runs]
+        except reset_demo.ResetError as exc:
+            st.session_state.everyone = None
+            st.error(str(exc))
+if st.session_state.get("everyone"):
+    st.success(f"Node B ran for {len(st.session_state.everyone)} customers.")
+    st.dataframe(pd.DataFrame(st.session_state.everyone), hide_index=True, width="stretch")
+
+# ---- 2. The mock input form ----
+st.header("2. Mock input form")
 st.caption("Type an interaction as it would really reach the bank, personal details and all. "
            "Only the sanitized version ever reaches Node B, the ledger or the AI.")
 e1, e2 = st.columns(2)
@@ -145,7 +185,7 @@ if st.button("Submit to Node B", type="primary", key="submit"):
 if "submission" in st.session_state:
     sub = st.session_state.submission
     raw, clean, run = sub["raw"], sub["clean"], sub["run"]
-    st.header("2. What the sanitizer kept and threw away")
+    st.header("3. What the sanitizer kept and threw away")
     left, right = st.columns(2)
     left.markdown("**✅ Kept (all Node B ever sees)**")
     left.dataframe(pd.DataFrame(clean.items(), columns=["Field", "Value"]), hide_index=True, width="stretch")
@@ -166,7 +206,7 @@ if "submission" in st.session_state:
 
     # ---- 3. The customer's promises, as they now are ----
     token = clean["customer_token"]
-    st.header(f"3. {token} now")
+    st.header(f"4. {token} now")
     score = combined_score(token)
     m1, m2, m3 = st.columns(3)
     m1.metric("Combined score", f"{score.score} {score.band}" if score else "not scored")
@@ -182,7 +222,7 @@ if "submission" in st.session_state:
         st.caption("No promises for this customer.")
 
 # ---- 4. All clean interactions and B's ledger entries ----
-st.header("4. Clean interaction data and Node B's ledger entries")
+st.header("5. Clean interaction data and Node B's ledger entries")
 clean_rows = sanitize.read_csv(clean_dir() / CLEAN_INTERACTIONS_FILE)
 st.caption(f"`data/clean/interactions.csv`: {len(clean_rows)} interactions, tokens and keyword flags only "
            "(no names, contact details or text).")
