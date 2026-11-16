@@ -19,7 +19,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | C-3 Tamper check: `verify_chain()` + `ledger_verify_chain` tool | Done |
 | C-5/C-6 Ledger logic: combined score, open hardship case, Quiet Help list, Risk Dashboard. **All 5 ledger tools done** | Done |
 | D-1 Policy gatekeeper: `check_action()` with P2 (no collections during hardship) and P4 (no credit offers to HIGH+). P3 caller check is a fail-closed placeholder until D-2 | Done |
-| Next for Owner-CD: D-2..D-9 (caller check, deadlines, recommendations, `agent.py`), C-8 seed data, UI pages | In progress |
+| C-8 Seed data: `python scripts/load_fixtures.py` loads a realistic demo ledger (`--stage start` or `full`) | Done |
+| Next for Owner-CD: C-9 ledger page, D-2..D-9 (caller check, deadlines, recommendations, `agent.py`) | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -127,6 +128,7 @@ pip install -r requirements.txt
 #   OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
 python -m shared.llm             # check your OpenRouter key + model work (works today)
 python -m pytest                 # run the tests (works today)
+python scripts/load_fixtures.py  # load demo data into the ledger, data/guardian.db (works today)
 python server.py --list          # list every MCP tool, grouped by node (works today)
 python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)
 python scripts/reset_demo.py     # generate -> sanitize -> run A and B workflows (--no-ai)
