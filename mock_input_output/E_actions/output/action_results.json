@@ -1,0 +1,30 @@
+[
+  {
+    "rec_id": "R-0001",
+    "customer_token": "cust_af4200",
+    "action": "QUIET_HELP_PUSH",
+    "message_id": "M-0001",
+    "options": [
+      "PAUSE_REPAYMENTS",
+      "REDUCE_REPAYMENTS",
+      "BOOK_CALL"
+    ]
+  },
+  {
+    "rec_id": "R-0002",
+    "customer_token": "cust_2c7c98",
+    "action": "ESCALATE",
+    "why": [
+      "P1_PROMISE_MISSED",
+      "CALLBACK_OVERDUE"
+    ]
+  },
+  {
+    "rec_id": "R-0004",
+    "customer_token": "cust_af4200",
+    "action": "BOOK_MEETING",
+    "meeting_time": "2026-11-18T14:00:00",
+    "staff": "staff_b38",
+    "call_code": "U5PXLW"
+  }
+]

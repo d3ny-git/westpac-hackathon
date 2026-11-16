@@ -1,0 +1,32 @@
+[
+  {
+    "rec_id": "R-0001",
+    "customer_token": "cust_af4200",
+    "recommendation": "QUIET_HELP_PUSH",
+    "status": "DONE"
+  },
+  {
+    "rec_id": "R-0002",
+    "customer_token": "cust_2c7c98",
+    "recommendation": "ESCALATE",
+    "status": "DONE"
+  },
+  {
+    "rec_id": "R-0003",
+    "customer_token": "cust_bb4b75",
+    "recommendation": "QUIET_HELP_PUSH",
+    "status": "REJECTED"
+  },
+  {
+    "rec_id": "R-0004",
+    "customer_token": "cust_af4200",
+    "recommendation": "BOOK_MEETING",
+    "status": "DONE"
+  },
+  {
+    "rec_id": "R-0005",
+    "customer_token": "cust_3d6abe",
+    "recommendation": "BOOK_MEETING",
+    "status": "AWAITING_APPROVAL"
+  }
+]

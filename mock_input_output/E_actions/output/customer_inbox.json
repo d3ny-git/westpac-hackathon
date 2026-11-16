@@ -1,0 +1,25 @@
+{
+  "cust_af4200": [
+    {
+      "message_id": "M-0001",
+      "kind": "QUIET_HELP",
+      "lock_screen": "You have a new message from Westpac",
+      "in_app_title": "We're here if you need a hand",
+      "in_app_body": "If things are tight right now, you have options. Choose one below or ignore this message.",
+      "options": [
+        "PAUSE_REPAYMENTS",
+        "REDUCE_REPAYMENTS",
+        "BOOK_CALL"
+      ]
+    },
+    {
+      "message_id": "M-0002",
+      "kind": "MEETING",
+      "lock_screen": "You have a new message from Westpac",
+      "in_app_title": "Your call with a hardship specialist",
+      "in_app_body": "A Westpac hardship specialist will call you at the time below. They will say this code. If a caller can't tell you the code, hang up.",
+      "meeting_time": "2026-11-18T14:00:00",
+      "call_code": "U5PXLW"
+    }
+  ]
+}

@@ -1,8 +1,8 @@
-# Mock input and output for Nodes A and B
+# Mock input and output for Nodes A, B and E
 
-This folder lets A and B be built and tested **in parallel**. Nobody has to wait for anyone else.
+This folder lets A, B and E be built and tested **in parallel**. Nobody has to wait for anyone else.
 
-- **`input/`** is what the node receives. It contains **FAKE PII** on purpose (names, emails, phones, DOB, address, BSB, account numbers), because that's what the sanitizer must remove.
+- **`input/`** is what the node receives. It contains **FAKE PII** on purpose (names, emails, phones, DOB, address, BSB, account numbers), because that's what the sanitizer must remove. (E's inputs have no PII: they come after sanitizing.)
 - **`output/`** is the correct answer. Your sanitizer and rules should produce exactly these files from the inputs. Use them as golden test data.
 
 > Every person here is invented. Phone numbers come from the ACMA range reserved for fiction (0491 570 xxx), and emails use `example.com`. **Never put real customer data in this folder.**
@@ -15,6 +15,7 @@ This folder lets A and B be built and tested **in parallel**. Nobody has to wait
 | `TOKEN_SECRET` | `mock-demo-secret` (use this in `.env` when testing against these files, or your tokens won't match) |
 | Customer token | `"cust_" + hmac_sha256(TOKEN_SECRET, customer_id).hexdigest()[:6]` |
 | Staff token | `"staff_" + hmac_sha256(TOKEN_SECRET, staff_id).hexdigest()[:3]` |
+| `CALL_CODE_SECRET` (E only) | `mock-call-code-secret`. Call codes in E's sample are `base32(hmac_sha256(CALL_CODE_SECRET, rec_id))[:6]`, e.g. R-0004 → `U5PXLW` |
 
 ## Folder layout
 
@@ -31,6 +32,14 @@ mock_input_output/
     output/interactions_clean.csv       history + form after sanitize: tokens + keyword flags, TEXT DELETED
     output/interaction_scores.json      Score messages Node B sends to the ledger
     output/promises.json                Promise messages Node B sends to the ledger
+  E_actions/
+    input/recommendations.json          5 recommendations from Node D (awaiting approval)
+    input/approvals.json                what staff clicked in the UI (3 approve, 1 reject, 1 not yet)
+    output/action_results.json          what E carried out: Quiet Help push, meeting booking, escalation
+    output/ledger_writes.json           every ledger entry E writes, in order (13 entries)
+    output/customer_inbox.json          what the customer sees in the Westpac app
+    output/pending.json                 what actions_pending() returns (still awaiting approval)
+    output/status.json                  what actions_status(rec_id) returns for each recommendation
 ```
 
 ## A: Account
@@ -90,8 +99,45 @@ Cap at 100. Bands: LOW < 30, MODERATE 30–59, HIGH 60–79, CRITICAL 80+.
 
 **Hero before the form:** with only the history CSV processed, hero's B score is **0 LOW** (2 contacts, no keywords). That's why hero is a Quiet Help candidate first. Once the mock form is submitted, it becomes 50, and combined with A it's floor(63 + 50/4) = **75 HIGH**.
 
+## E: Actions
+
+E's input is **D's output**, so there's no raw data or PII here. Everything is already tokens and codes. Every file matches the models in `shared/schemas.py`.
+
+**Inputs**
+- `recommendations.json`: what Node D recommended (`Recommendation` messages, status `AWAITING_APPROVAL`).
+- `approvals.json`: what staff clicked on E's page (`Approval` messages). In the real app these come from the Approve/Reject buttons, never from the AI.
+
+**The 5 recommendations and what happens to each**
+
+| rec_id | Customer | Recommendation | Human decision | What E does | Final status |
+|---|---|---|---|---|---|
+| R-0001 | hero `cust_af4200` | QUIET_HELP_PUSH | ✅ approved by `staff_b38` | Sends push **M-0001** with options PAUSE / REDUCE / BOOK_CALL | DONE |
+| R-0002 | late_callback `cust_2c7c98` | ESCALATE | ✅ approved by `staff_9bb` | Escalates the overdue callback | DONE |
+| R-0003 | critical `cust_bb4b75` | QUIET_HELP_PUSH | ❌ rejected by `staff_9bb` | **Nothing is sent** | REJECTED |
+| R-0004 | hero `cust_af4200` | BOOK_MEETING | ✅ approved by `staff_b38` | Books 18 Nov 14:00 with call code **U5PXLW**, schedules the contact, adds a MEETING promise (**P-0005**) | DONE |
+| R-0005 | open_case `cust_3d6abe` | BOOK_MEETING | (no decision yet) | **Nothing.** It stays in the approval queue | AWAITING_APPROVAL |
+
+**What E writes to the ledger** (`ledger_writes.json`): each item is exactly what E passes to `ledger.store.append(entry_type, customer_token, data)`. The ledger adds the ID, time and hashes.
+
+| Situation | Entries, in order |
+|---|---|
+| Approved Quiet Help push / escalation | `APPROVAL` → `ACTION` → `STATUS_UPDATE` (rec → DONE) |
+| Approved meeting | `APPROVAL` → `ACTION` (MeetingBooking) → `CONTACT_SCHEDULED` (call code, for policy P3) → `PROMISE` (MEETING) → `STATUS_UPDATE` (rec → DONE) |
+| Rejected | `APPROVAL` (approved=false) → `STATUS_UPDATE` (rec → REJECTED). No action |
+| No decision yet | nothing |
+
+**What the customer sees** (`customer_inbox.json`): the lock screen only ever says *"You have a new message from Westpac"*. The details (options, meeting time, call code) only show inside the app. This is the data for the mock phone on E's page.
+
+**Caller check examples** for E's "verify caller code" box (the answer comes from Node D, policy P3):
+- hero + code `U5PXLW` → **ALLOW** (matches the CONTACT_SCHEDULED entry)
+- hero + code `K7P4QX` or anything else → **BLOCK, P3, POSSIBLE_SCAM**
+- open_case + any code → **BLOCK, P3** (no meeting booked yet)
+
+Meeting times, message wording and the call-code method are just this sample's choices. E can change any of them.
+
 ## How to use this
 - **A:** `sanitize_transactions(input/transactions_raw.csv)` should equal `output/transactions_clean.csv`, and running your rules over it should equal `output/account_scores.json`.
 - **B:** sanitizing the history plus the form entries should equal `output/interactions_clean.csv`, and running your rules should equal `output/interaction_scores.json` and `output/promises.json`.
 - **PII test:** none of the names, emails, phones, BSBs or account numbers in `input/` may appear anywhere in `output/`, the ledger or the run logs.
-- **C, D and E:** use the `output/` files as your stand-in for A and B until the real nodes are ready.
+- **E:** feed `input/recommendations.json` + `input/approvals.json` through your approve/execute code; the ledger entries you write should match `output/ledger_writes.json`, and `actions_pending()`, `actions_status()` and `actions_inbox()` should return `pending.json`, `status.json` and `customer_inbox.json`.
+- **C, D and E:** use A's and B's `output/` files as your stand-in for A and B until the real nodes are ready.

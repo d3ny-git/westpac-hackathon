@@ -1,0 +1,54 @@
+[
+  {
+    "rec_id": "R-0001",
+    "customer_token": "cust_af4200",
+    "recommendation": "QUIET_HELP_PUSH",
+    "why": [
+      "SCORE_HIGH",
+      "SALARY_STOPPED",
+      "NO_OPEN_CASE"
+    ],
+    "status": "AWAITING_APPROVAL"
+  },
+  {
+    "rec_id": "R-0002",
+    "customer_token": "cust_2c7c98",
+    "recommendation": "ESCALATE",
+    "why": [
+      "P1_PROMISE_MISSED",
+      "CALLBACK_OVERDUE"
+    ],
+    "status": "AWAITING_APPROVAL"
+  },
+  {
+    "rec_id": "R-0003",
+    "customer_token": "cust_bb4b75",
+    "recommendation": "QUIET_HELP_PUSH",
+    "why": [
+      "SCORE_CRITICAL",
+      "LOAN_ARREARS",
+      "NO_OPEN_CASE"
+    ],
+    "status": "AWAITING_APPROVAL"
+  },
+  {
+    "rec_id": "R-0004",
+    "customer_token": "cust_af4200",
+    "recommendation": "BOOK_MEETING",
+    "why": [
+      "HARDSHIP_CASE_OPEN",
+      "NO_MEETING_BOOKED"
+    ],
+    "status": "AWAITING_APPROVAL"
+  },
+  {
+    "rec_id": "R-0005",
+    "customer_token": "cust_3d6abe",
+    "recommendation": "BOOK_MEETING",
+    "why": [
+      "HARDSHIP_CASE_OPEN",
+      "NO_MEETING_BOOKED"
+    ],
+    "status": "AWAITING_APPROVAL"
+  }
+]

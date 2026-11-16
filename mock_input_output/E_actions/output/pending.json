@@ -1,0 +1,12 @@
+[
+  {
+    "rec_id": "R-0005",
+    "customer_token": "cust_3d6abe",
+    "recommendation": "BOOK_MEETING",
+    "why": [
+      "HARDSHIP_CASE_OPEN",
+      "NO_MEETING_BOOKED"
+    ],
+    "status": "AWAITING_APPROVAL"
+  }
+]

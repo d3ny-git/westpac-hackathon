@@ -1,0 +1,152 @@
+[
+  {
+    "step": 1,
+    "entry_type": "APPROVAL",
+    "customer_token": "cust_af4200",
+    "data": {
+      "rec_id": "R-0001",
+      "approved_by": "staff_b38",
+      "approved": true
+    }
+  },
+  {
+    "step": 2,
+    "entry_type": "ACTION",
+    "customer_token": "cust_af4200",
+    "data": {
+      "customer_token": "cust_af4200",
+      "action": "QUIET_HELP_PUSH",
+      "message_id": "M-0001",
+      "options": [
+        "PAUSE_REPAYMENTS",
+        "REDUCE_REPAYMENTS",
+        "BOOK_CALL"
+      ]
+    }
+  },
+  {
+    "step": 3,
+    "entry_type": "STATUS_UPDATE",
+    "customer_token": "cust_af4200",
+    "data": {
+      "customer_token": "cust_af4200",
+      "ref_id": "R-0001",
+      "status": "DONE",
+      "updated_by": "SYSTEM"
+    }
+  },
+  {
+    "step": 4,
+    "entry_type": "APPROVAL",
+    "customer_token": "cust_2c7c98",
+    "data": {
+      "rec_id": "R-0002",
+      "approved_by": "staff_9bb",
+      "approved": true
+    }
+  },
+  {
+    "step": 5,
+    "entry_type": "ACTION",
+    "customer_token": "cust_2c7c98",
+    "data": {
+      "customer_token": "cust_2c7c98",
+      "action": "ESCALATE",
+      "why": [
+        "P1_PROMISE_MISSED",
+        "CALLBACK_OVERDUE"
+      ]
+    }
+  },
+  {
+    "step": 6,
+    "entry_type": "STATUS_UPDATE",
+    "customer_token": "cust_2c7c98",
+    "data": {
+      "customer_token": "cust_2c7c98",
+      "ref_id": "R-0002",
+      "status": "DONE",
+      "updated_by": "SYSTEM"
+    }
+  },
+  {
+    "step": 7,
+    "entry_type": "APPROVAL",
+    "customer_token": "cust_bb4b75",
+    "data": {
+      "rec_id": "R-0003",
+      "approved_by": "staff_9bb",
+      "approved": false
+    }
+  },
+  {
+    "step": 8,
+    "entry_type": "STATUS_UPDATE",
+    "customer_token": "cust_bb4b75",
+    "data": {
+      "customer_token": "cust_bb4b75",
+      "ref_id": "R-0003",
+      "status": "REJECTED",
+      "updated_by": "staff_9bb"
+    }
+  },
+  {
+    "step": 9,
+    "entry_type": "APPROVAL",
+    "customer_token": "cust_af4200",
+    "data": {
+      "rec_id": "R-0004",
+      "approved_by": "staff_b38",
+      "approved": true
+    }
+  },
+  {
+    "step": 10,
+    "entry_type": "ACTION",
+    "customer_token": "cust_af4200",
+    "data": {
+      "customer_token": "cust_af4200",
+      "action": "BOOK_MEETING",
+      "meeting_time": "2026-11-18T14:00:00",
+      "staff": "staff_b38",
+      "call_code": "U5PXLW"
+    }
+  },
+  {
+    "step": 11,
+    "entry_type": "CONTACT_SCHEDULED",
+    "customer_token": "cust_af4200",
+    "data": {
+      "customer_token": "cust_af4200",
+      "call_code": "U5PXLW",
+      "contact_time": "2026-11-18T14:00:00",
+      "staff": "staff_b38"
+    }
+  },
+  {
+    "step": 12,
+    "entry_type": "PROMISE",
+    "customer_token": "cust_af4200",
+    "data": {
+      "customer_token": "cust_af4200",
+      "promise_id": "P-0005",
+      "promise_type": "MEETING",
+      "description": "Hardship specialist to call at the booked time and quote the call code",
+      "made_by": "staff_b38",
+      "made_via": "CALL",
+      "due": "2026-11-18T14:00:00",
+      "status": "OPEN"
+    }
+  },
+  {
+    "step": 13,
+    "entry_type": "STATUS_UPDATE",
+    "customer_token": "cust_af4200",
+    "data": {
+      "customer_token": "cust_af4200",
+      "ref_id": "R-0004",
+      "status": "DONE",
+      "updated_by": "SYSTEM"
+    }
+  }
+]
