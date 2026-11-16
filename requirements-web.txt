@@ -1,0 +1,5 @@
+# Extra Python dependencies for the GEL React UI (api/ + app.py), on top of requirements.txt.
+# Install with: pip install -r requirements.txt -r requirements-web.txt
+fastapi>=0.115        # the JSON API over the existing node functions (api/)
+uvicorn>=0.30         # serves the API + the built UI on 127.0.0.1:8600 (app.py)
+httpx>=0.27           # FastAPI's TestClient (tests/test_api.py)
