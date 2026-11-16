@@ -161,13 +161,13 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 - [x] 6. Policy sweep: run log picker (newest / the run just made), status, each step's output, OFF SCRIPT and stopped events, summary, error
 
 ### `ui/pages/E.py` → Actions (E)
-- [ ] Metrics: pending, approved, completed, total
-- [ ] Approval Queue: acting staff member, each pending recommendation (action, rec, customer, reasons) with Approve / Reject
-- [ ] Approval Queue: errors and warnings from approve / reject shown
-- [ ] Approved, awaiting execution: Execute (re-checked by D), shows a block or an execution error
-- [ ] Customer Experience: customer picker, phone mock-up, lock-screen text only, messages (Quiet Help options, meeting time and call code)
-- [ ] Caller verification (P3): type the code the caller quoted → genuine / possible scam, recorded in the ledger; warning when empty; never shows the real code
-- [ ] Activity & Status: recommendation status table, ledger activity table (newest first), "append-only, no reset here" note
+- [x] Metrics: pending, approved, completed, total
+- [x] Approval Queue: acting staff member, each pending recommendation (action, rec, customer, reasons) with Approve / Reject
+- [x] Approval Queue: errors and warnings from approve / reject shown
+- [x] Approved, awaiting execution: Execute (re-checked by D), shows a block or an execution error
+- [x] Customer Experience: customer picker, phone mock-up, lock-screen text only, messages (Quiet Help options, meeting time and call code)
+- [x] Caller verification (P3): type the code the caller quoted → genuine / possible scam, recorded in the ledger; warning when empty; never shows the real code
+- [x] Activity & Status: recommendation status table, ledger activity table (newest first), "append-only, no reset here" note
 
 ### New in the React UI
 - [ ] Home: C → D → E pipeline with live counts per node
