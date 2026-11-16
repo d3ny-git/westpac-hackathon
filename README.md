@@ -6,15 +6,30 @@ Westpac hackathon project. Westpac was fined $26m for missing customer hardship 
 - applies plain-code policies
 - recommends actions that a human must approve
 
-Built in Python with one FastMCP server, an OpenRouter LLM, a Streamlit UI and SQLite, all running locally.
+Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit UI and SQLite, all running locally.
 
 ## Status
 
 | What | State |
 |---|---|
 | Plan, docs, mock data | Done (`docs/`, `mock_input_output/`) |
-| `shared/llm.py` (AI gateway) + `shared/pii_guard.py` (PII check) | Done, with tests (`tests/test_llm.py`) |
-| Rest of Phase 0: schemas, config, ledger store, `agent.py`, `server.py` | Next (Owner-CD) |
+| `shared/`: `llm.py` (AI gateway), `pii_guard.py` (PII check + `@safe_tool`), `config.py`, `schemas.py` | Done ([shared/README.md](shared/README.md)) |
+| C-2 Ledger store: `store.append()`, `read()`, `next_id()` | Done |
+| C-7 MCP server: `server.py` + `scripts/try_tool.py`. **A, B, E can now add their tools** ([nodes/README.md](nodes/README.md)) | Done |
+| C-3 Tamper check: `verify_chain()` + `ledger_verify_chain` tool | Done |
+| C-5/C-6 Ledger logic: combined score, open hardship case, Quiet Help list, Risk Dashboard. **All 5 ledger tools done** | Done |
+| D-1 Policy gatekeeper: `check_action()` with P2 (no collections during hardship) and P4 (no credit offers to HIGH+). P3 caller check is a fail-closed placeholder until D-2 | Done |
+| C-8 Seed data: `python scripts/load_fixtures.py` loads a realistic demo ledger (`--stage start` or `full`) | Done |
+| C-9 Ledger page: `streamlit run ui/pages/C.py` (integrity badge + checkpoint, Risk Dashboard, Quiet Help, customer lookup, full ledger, demo controls) | Done |
+| D-2 Caller check (P3): a caller is ALLOWED only if their call code matches a booked call (`CONTACT_SCHEDULED`); otherwise BLOCKED as a possible scam | Done |
+| D-3 Deadline watcher (P1): `check_deadlines()` flags open promises due within 24h (ALERT) or overdue (ESCALATE) | Done |
+| D-4 Recommendations: `recommend()` suggests ESCALATE / BOOK_MEETING / QUIET_HELP_PUSH (awaiting human approval, no repeats within 30 days). `tracked_recommendations()` gives each one's status, ready for Node E | Done |
+| D-5 Explain: `explain(entry_id)` gives the facts behind any decision or recommendation (as known at the time, call codes hidden); `explain_in_words()` has the AI rephrase them for staff | Done |
+| D-6 Policy tools: `policy_check_action`, `policy_deadlines`, `policy_recommend`, `policy_explain` (the server now has 9 tools) | Done |
+| D-7 `agent.py`: runs a runbook with the AI, keeping it on script (only the listed tools, in order, with the runbook's arguments). **A and B can now write and run their runbooks** ([runbooks/README.md](runbooks/README.md)) | Done |
+| D-8 Runbooks: stop rules (e.g. stop if the ledger was tampered with), `--no-ai` mode (same steps, no AI: identical ledger), `policy_sweep.md`, `execute.md` (waits for E's tools) | Done |
+| D-9 Policy page: `streamlit run ui/pages/D.py` (check an action, deadlines, recommendations, decisions, explain with AI, run the policy sweep + replay runs) | Done |
+| **C and D board complete.** Waiting on A, B and E to plug in their tools and runbooks | — |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -102,7 +117,7 @@ Set `TOKEN_SECRET=mock-demo-secret` when testing against these files, or the tok
 shared/        schemas.py  config.py  pii_guard.py  llm.py
 sanitize.py    sanitize_transactions() (A) + sanitize_interaction() (B)
 nodes/         account.py  interaction.py  ledger/  policy.py  actions.py
-server.py      one FastMCP server (each node registers its tools)
+server.py      one MCP server (each node registers its tools)
 agent.py       runbook runner
 runbooks/      a_account.md  b_interaction.md  policy_sweep.md  execute.md
 ui/            app.py + pages/ A.py B.py C.py D.py E.py
@@ -122,6 +137,13 @@ pip install -r requirements.txt
 #   OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
 python -m shared.llm             # check your OpenRouter key + model work (works today)
 python -m pytest                 # run the tests (works today)
+python scripts/load_fixtures.py  # load demo data into the ledger, data/guardian.db (works today)
+python server.py --list          # list every MCP tool, grouped by node (works today)
+python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)
+streamlit run ui/pages/C.py      # the ledger page (works today)
+streamlit run ui/pages/D.py      # the policy page (works today)
+python agent.py runbooks/ledger_check.md   # the AI runs a runbook (works today, needs .env)
+python agent.py runbooks/policy_sweep.md --no-ai   # the policy sweep without the AI (works today)
 python scripts/reset_demo.py     # generate -> sanitize -> run A and B workflows (--no-ai)
 streamlit run ui/app.py
 ```

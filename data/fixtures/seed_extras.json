@@ -1,0 +1,32 @@
+{
+  "_about": "Extra ledger entries that scripts/load_fixtures.py adds on top of mock_input_output/. Everything else comes from those mock files, so there is only one copy of the data.",
+  "before_scores": [
+    {
+      "_why": "recent_push got a Quiet Help push 12 days before AS_OF, so the 30-day rule keeps them OFF the Quiet Help list. M-0100 so it never clashes with E's sample messages (M-0001...).",
+      "entry_type": "ACTION",
+      "customer_token": "cust_a26449",
+      "created_at": "2026-11-04T10:00:00",
+      "data": {
+        "customer_token": "cust_a26449",
+        "action": "QUIET_HELP_PUSH",
+        "message_id": "M-0100",
+        "options": ["PAUSE_REPAYMENTS", "REDUCE_REPAYMENTS", "BOOK_CALL"]
+      }
+    }
+  ],
+  "hero_before_form": [
+    {
+      "_why": "hero's interaction score BEFORE the hardship form (2 contacts, no keywords). The mock B output only has the score AFTER the form (50).",
+      "entry_type": "SCORE",
+      "customer_token": "cust_af4200",
+      "data": {
+        "customer_token": "cust_af4200",
+        "source": "INTERACTION",
+        "score": 0,
+        "band": "LOW",
+        "reasons": [],
+        "timestamp": "2026-11-16T10:00:00"
+      }
+    }
+  ]
+}
