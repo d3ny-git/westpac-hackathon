@@ -2,6 +2,7 @@
 
     python agent.py runbooks/ledger_check.md
     python agent.py runbooks/b_interaction.md --var token=cust_af4200
+    python agent.py runbooks/policy_sweep.md --no-ai      # same steps, no AI (demo fallback)
 
 How it stays deterministic:
   1. The runbook lists the exact steps (tool names, in order, with any fixed arguments).
@@ -10,6 +11,11 @@ How it stays deterministic:
      wrong order, different arguments, an extra call) stops the run as OFF_SCRIPT.
   4. The tool is run with the RUNBOOK's arguments, never ones the AI made up.
   5. When all steps are done, the AI writes a short summary using only what the tools returned.
+  6. A step can have a stop rule (e.g. stop if the ledger was tampered with). The run stops
+     there, whatever the AI would have done next.
+
+--no-ai runs exactly the same steps without the AI. It's the demo fallback (no key or no Wi-Fi
+needed) and the proof that the AI changes nothing: both modes leave the ledger identical.
 The AI decides nothing: the tools (plain Python) do the work. Everything is logged to
 data/runs/<run_id>.jsonl, and every AI call goes through shared/llm.py (PII check, temperature 0).
 
@@ -45,6 +51,36 @@ RUNS_DIR = REPO / "data" / "runs"           # gitignored
 class Step(BaseModel):
     tool: str
     args: dict[str, Any] = {}
+    stop_if: Optional[str] = None             # e.g. "valid == false" (see check_stop)
+    stop_message: Optional[str] = None        # what to report when it stops, e.g. "LEDGER TAMPERED"
+
+
+_CONDITION = re.compile(r"^\s*([A-Za-z_][\w.]*)\s*(==|!=)\s*(.+?)\s*$")
+
+
+def parse_condition(text: str) -> tuple[str, str, Any]:
+    """A stop rule is deliberately simple: `field == value` or `field != value`.
+
+    field can reach inside the tool's output with dots (e.g. report.valid); value is
+    true / false / a number / text. Anything else is refused, so a runbook can't run code."""
+    match = _CONDITION.match(text or "")
+    if not match:
+        raise ValueError(f"stop_if must look like 'field == value' or 'field != value', got {text!r}")
+    field, op, raw = match.groups()
+    return field, op, yaml.safe_load(raw)
+
+
+def check_stop(step: Step, output: Any) -> bool:
+    """True if this step's stop rule matches the tool's output."""
+    if not step.stop_if:
+        return False
+    field, op, value = parse_condition(step.stop_if)
+    current: Any = output
+    for part in field.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return False                      # field not in the output: the rule doesn't apply
+        current = current[part]
+    return (current == value) if op == "==" else (current != value)
 
 
 class Runbook(BaseModel):
@@ -79,6 +115,8 @@ def load_runbook(path: Path | str, variables: Optional[dict[str, str]] = None) -
     for raw in settings.get("steps") or []:
         step: dict[str, Any] = {"tool": raw} if isinstance(raw, str) else dict(raw)
         step["args"] = {k: fill(v) for k, v in (step.get("args") or {}).items()}
+        if step.get("stop_if"):
+            parse_condition(step["stop_if"])  # refuse a bad rule now, not halfway through a run
         steps.append(Step(**step))
     if not steps:
         raise ValueError(f"{path} has no steps")
@@ -100,8 +138,9 @@ class StepResult(BaseModel):
 class RunResult(BaseModel):
     run_id: str
     runbook: str
-    mode: str                                 # "ai"
-    status: str                               # COMPLETED / OFF_SCRIPT / TOOL_ERROR / INCOMPLETE / BLOCKED_PII / LLM_ERROR / SETUP_ERROR
+    mode: str                                 # "ai" or "no-ai"
+    status: str                               # COMPLETED / STOPPED / OFF_SCRIPT / TOOL_ERROR / INCOMPLETE /
+                                              # BLOCKED_PII / LLM_ERROR / SETUP_ERROR
     steps: list[StepResult] = []
     summary: str = ""
     error: Optional[str] = None
@@ -172,13 +211,51 @@ def system_prompt(rb: Runbook) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Running with the AI
+# Running the steps
 # ---------------------------------------------------------------------------
-async def _run_ai(rb: Runbook, client: Client, result: RunResult, log: RunLog) -> None:
+async def _available_tools(rb: Runbook, client: Client, result: RunResult) -> Optional[dict]:
     available = {t.name: t for t in (await client.list_tools()).tools}
     missing = [s.tool for s in rb.steps if s.tool not in available]
     if missing:
         result.status, result.error = "SETUP_ERROR", f"tool not on the server (node not built yet?): {missing[0]}"
+        return None
+    return available
+
+
+async def _do_step(client: Client, step: Step, n: int, result: RunResult, log: RunLog) -> Optional[Any]:
+    """Run one step with the RUNBOOK's arguments. Returns the output, or None if the run must end
+    here (tool error or stop rule), in which case result.status is already set."""
+    mcp_result = await client.call_tool(step.tool, step.args)
+    output = tool_output(mcp_result)
+    record = StepResult(n=n, tool=step.tool, args=step.args, ok=not mcp_result.is_error, output=output)
+    result.steps.append(record)
+    log.write("step", **record.model_dump())
+    if mcp_result.is_error:
+        result.status, result.error = "TOOL_ERROR", f"{step.tool} failed: {output}"
+        return None
+    if check_stop(step, output):
+        result.status = "STOPPED"
+        result.error = f"stopped at step {n} ({step.tool}): {step.stop_if}"
+        result.summary = step.stop_message or f"Stopped: {step.stop_if}"
+        log.write("stopped", step=n, rule=step.stop_if, message=result.summary)
+        return None
+    return output
+
+
+async def _run_no_ai(rb: Runbook, client: Client, result: RunResult, log: RunLog) -> None:
+    """--no-ai: the same steps, in the same order, with the same arguments. No AI involved."""
+    if await _available_tools(rb, client, result) is None:
+        return
+    for n, step in enumerate(rb.steps, 1):
+        if await _do_step(client, step, n, result, log) is None:
+            return
+    result.status = "COMPLETED"
+    result.summary = f"All {len(rb.steps)} steps completed without the AI. See each step's output."
+
+
+async def _run_ai(rb: Runbook, client: Client, result: RunResult, log: RunLog) -> None:
+    available = await _available_tools(rb, client, result)
+    if available is None:
         return
     offered = [openai_tool(available[name]) for name in dict.fromkeys(s.tool for s in rb.steps)]
 
@@ -200,15 +277,9 @@ async def _run_ai(rb: Runbook, client: Client, result: RunResult, log: RunLog) -
                 log.write("off_script", step=done + 1, called=call.name, arguments=call.arguments,
                           expected=expected.tool if expected else None)
                 return
-            mcp_result = await client.call_tool(expected.tool, expected.args)   # the RUNBOOK's arguments
-            output = tool_output(mcp_result)
-            step = StepResult(n=done + 1, tool=expected.tool, args=expected.args,
-                              ok=not mcp_result.is_error, output=output)
-            result.steps.append(step)
-            log.write("step", **step.model_dump())
-            if mcp_result.is_error:
-                result.status, result.error = "TOOL_ERROR", f"{expected.tool} failed: {output}"
-                return
+            output = await _do_step(client, expected, done + 1, result, log)   # the RUNBOOK's arguments
+            if output is None:
+                return                                     # tool error or stop rule: the run ends here
             messages.append({"role": "tool", "tool_call_id": call.id,
                              "content": json.dumps(output, default=str, ensure_ascii=False)})
             done += 1
@@ -227,18 +298,20 @@ async def _run_ai(rb: Runbook, client: Client, result: RunResult, log: RunLog) -
     result.status = "COMPLETED"
 
 
-async def run_async(path: Path | str, variables: Optional[dict[str, str]] = None, *, server=None) -> RunResult:
-    """Run a runbook with the AI. `server` is for tests (an in-process MCP server); normally
-    server.py is started as a separate process."""
+async def run_async(path: Path | str, variables: Optional[dict[str, str]] = None, *, ai: bool = True,
+                    server=None) -> RunResult:
+    """Run a runbook, with the AI (ai=True) or without it (ai=False, same steps).
+    `server` is for tests (an in-process MCP server); normally server.py is started as a separate process."""
     rb = load_runbook(path, variables)
-    run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{rb.name}-{uuid.uuid4().hex[:4]}"
+    mode = "ai" if ai else "no-ai"
+    run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{rb.name}-{mode}-{uuid.uuid4().hex[:4]}"
     log = RunLog(run_id)
-    result = RunResult(run_id=run_id, runbook=rb.name, mode="ai", status="RUNNING", log_file=str(log.path))
-    log.write("start", runbook=rb.name, mode="ai", steps=[s.model_dump() for s in rb.steps], variables=variables or {})
+    result = RunResult(run_id=run_id, runbook=rb.name, mode=mode, status="RUNNING", log_file=str(log.path))
+    log.write("start", runbook=rb.name, mode=mode, steps=[s.model_dump() for s in rb.steps], variables=variables or {})
     async with Client(server if server is not None else server_params()) as client:
         # Caught INSIDE the client block: errors that escape it come out wrapped in an ExceptionGroup.
         try:
-            await _run_ai(rb, client, result, log)
+            await (_run_ai if ai else _run_no_ai)(rb, client, result, log)
         except PIIError as exc:
             result.status, result.error = "BLOCKED_PII", str(exc)
         except llm.LLMError as exc:
@@ -247,24 +320,26 @@ async def run_async(path: Path | str, variables: Optional[dict[str, str]] = None
     return result
 
 
-def run(path: Path | str, variables: Optional[dict[str, str]] = None, *, server=None) -> RunResult:
+def run(path: Path | str, variables: Optional[dict[str, str]] = None, *, ai: bool = True,
+        server=None) -> RunResult:
     """Run a runbook (blocking). Returns a RunResult with the status, each step's output and the summary."""
-    return asyncio.run(run_async(path, variables, server=server))
+    return asyncio.run(run_async(path, variables, ai=ai, server=server))
 
 
 # ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a Customer Guardian runbook with the AI.")
+    parser = argparse.ArgumentParser(description="Run a Customer Guardian runbook (with the AI, or --no-ai).")
     parser.add_argument("runbook", help="e.g. runbooks/ledger_check.md")
     parser.add_argument("--var", action="append", default=[], metavar="NAME=VALUE",
                         help="fill a {NAME} in the runbook, e.g. --var token=cust_af4200")
+    parser.add_argument("--no-ai", action="store_true", help="run the same steps without the AI")
     args = parser.parse_args()
     variables = dict(v.split("=", 1) for v in args.var)
 
-    result = run(args.runbook, variables)
-    print(f"Runbook {result.runbook}: {result.status}")
+    result = run(args.runbook, variables, ai=not args.no_ai)
+    print(f"Runbook {result.runbook} ({result.mode}): {result.status}")
     for s in result.steps:
         print(f"  {'✔' if s.ok else '✘'} {s.n}. {s.tool}")
     if result.error:
@@ -272,7 +347,7 @@ def main() -> int:
     if result.summary:
         print(f"\n{result.summary}")
     print(f"\nLog: {result.log_file}")
-    return 0 if result.status == "COMPLETED" else 1
+    return 0 if result.status == "COMPLETED" else 1     # STOPPED is a non-zero exit too
 
 
 if __name__ == "__main__":
