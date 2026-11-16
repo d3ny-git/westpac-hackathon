@@ -19,3 +19,6 @@ data/clean/
 data/guardian.db
 data/*_checkpoint.json
 data/runs/
+
+# Claude Code local files (e.g. agent worktrees under .claude/worktrees/)
+.claude/
