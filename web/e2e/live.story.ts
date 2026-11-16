@@ -61,6 +61,8 @@ test('Jane and the hardship team, live: Quiet Help, the form, a booked call, P2 
   await customerTab(jane, 'Messages');
   await expect(jane.getByTestId('message-QUIET_HELP')).toContainText("We're here if you need a hand", { timeout: 60_000 });
   await expect(jane.getByTestId('lock-screen')).toContainText('You have a new message from Westpac');
+  await expect(jane.getByTestId('message-new')).toHaveCount(1); // labelled New while you're looking...
+  await expect(jane.getByTestId('message-count')).toHaveCount(0); // ...and the unread badge has gone
 
   // 4. Jane taps "Apply for hardship help" and submits the form; Westpac sees it with an assessment.
   await jane.getByRole('button', { name: 'Apply for hardship help' }).click();
@@ -84,6 +86,9 @@ test('Jane and the hardship team, live: Quiet Help, the form, a booked call, P2 
   await customerTab(jane, 'Messages');
   await expect(jane.getByTestId('message-MEETING')).toContainText('Your call with a hardship specialist', { timeout: 60_000 });
   const code = (await jane.getByTestId('call-code').textContent())!.trim();
+  // Jane acted on the Quiet Help offer, so it's tucked away under Earlier messages.
+  await expect(jane.getByTestId('message-QUIET_HELP')).toHaveCount(0);
+  await expect(jane.getByTestId('earlier-messages')).toContainText('earlier messages (1)');
   expect(code).toMatch(/^[A-Z2-7]{6}$/);
 
   // 6. On Westpac's Check an action, a default notice for hero is BLOCKED (P2).

@@ -37,6 +37,10 @@ export type CustomerMessage = {
   options?: string[];
   meeting_time?: string;
   call_code?: string;
+  id: string; // the hash of the ledger entry that sent it
+  seen: boolean; // already shown in the app
+  answered: boolean; // the customer acted on it (asked for help after an offer)
+  answered_on: string | null;
 };
 export type CustomerPromise = { kind: string; text: string; due: string };
 export type Received = { received: boolean; message: string };

@@ -2,7 +2,9 @@
 
     sign-in options     the (fake) customers to sign in as (demo: no passwords)
     overview            their OWN accounts and recent transactions (raw rows of that customer only)
-    messages            actions_inbox(token): Quiet Help offers, booked calls with the call code
+    messages            actions_inbox(token): Quiet Help offers, booked calls with the call code,
+                        each with seen (opened in the app) and answered (the customer acted on it)
+    messages/seen       the app marks the messages it has shown as seen (clears the unread badge)
     promises            what the bank has promised them, in plain words
     hardship / callback the customer contacts the bank: sanitized + stored straight away, then the
                         intake review runs (api/live.py: Node B + the AI hardship assessment)
@@ -18,7 +20,10 @@ clean row is written, and the AI only ever sees the sanitized results.
 """
 from __future__ import annotations
 
+import re
+import sqlite3
 from collections import OrderedDict
+from contextlib import closing
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -30,9 +35,10 @@ from api.common import RUN_LOCK
 from api.interaction import fake_customers
 from api.live import worker
 from nodes.actions import actions_inbox
+from nodes.ledger import store
 from nodes.ledger.quiet_help import open_promises
 from nodes.policy import check_action
-from shared.config import CLEAN_INTERACTIONS_FILE, SYSTEM_ACTOR, clean_dir, now
+from shared.config import CLEAN_INTERACTIONS_FILE, HASH_PATTERN, SYSTEM_ACTOR, clean_dir, now
 from shared.pii_guard import tokenise
 
 router = APIRouter(prefix="/api/customer", tags=["customer"])
@@ -60,6 +66,11 @@ class CallbackRequest(BaseModel):
     text: str = Field(default="", max_length=2000)
 
 
+class SeenMessages(BaseModel):
+    customer_id: str
+    ids: list[str] = Field(default_factory=list, max_length=50)
+
+
 class CallCheck(BaseModel):
     customer_id: str
     code: str = Field(default="", max_length=12)
@@ -84,6 +95,56 @@ def _nice(when: datetime) -> str:
     """'Tue 1 Dec, 5:00 pm' (no time zone: the demo's fixed clock)."""
     hour = when.strftime("%I").lstrip("0") or "12"
     return f"{when:%a} {when.day} {when:%b}, {hour}:{when:%M} {when:%p}".replace("AM", "am").replace("PM", "pm")
+
+
+# ---- messages: seen and answered -------------------------------------------------
+# A message's id is the hash of the ledger entry that sent it (no customer token, no entry ID).
+# "Seen" is app state, not a ledger fact, so it lives in its own small table in the same SQLite
+# file, OUTSIDE the hash chain: the ledger's entries table is never touched. Keeping it in that
+# file means a demo reset (which deletes the file) also forgets what was seen, even though the
+# rebuilt ledger repeats the same hashes.
+SEEN_TABLE = "app_message_seen"
+_HASH = re.compile(HASH_PATTERN)
+ANSWERS = {"HARDSHIP_RESPONSE", "CALLBACK"}       # a later hardship form or callback request answers an offer
+
+
+def _seen_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(store.db_file(), isolation_level=None, timeout=10)
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {SEEN_TABLE} (message_hash TEXT PRIMARY KEY, seen_at TEXT NOT NULL)")
+    return conn
+
+
+def _seen_hashes(hashes: list[str]) -> set[str]:
+    if not hashes or not store.db_file().exists():
+        return set()
+    with closing(_seen_db()) as conn:
+        marks = ",".join("?" * len(hashes))
+        return {r[0] for r in conn.execute(f"SELECT message_hash FROM {SEEN_TABLE} WHERE message_hash IN ({marks})",
+                                           hashes)}
+
+
+def _message_entries(token: str) -> tuple[list, list]:
+    """The ledger entries behind actions_inbox(token) (same filter, same order), and the
+    customer's whole history (to tell whether an offer has been answered)."""
+    history = store.read(customer_token=token)
+    sent = [e for e in history if e.entry_type == "ACTION" and (
+        (e.data.get("action") == "QUIET_HELP_PUSH" and "message_id" in e.data)
+        or (e.data.get("action") == "BOOK_MEETING" and "call_code" in e.data))]
+    return sent, history
+
+
+def _answered_on(entry, history: list) -> str | None:
+    """A Quiet Help offer is answered once the customer asks for help after it (a hardship form or
+    callback request becomes a PROMISE) or a call with a specialist is booked."""
+    if entry.data.get("action") != "QUIET_HELP_PUSH":
+        return None
+    later = history[[e.entry_id for e in history].index(entry.entry_id) + 1:]
+    for e in later:
+        if (e.entry_type == "PROMISE" and e.data.get("promise_type") in ANSWERS) or \
+                (e.entry_type == "ACTION" and e.data.get("action") == "BOOK_MEETING"):
+            when = datetime.fromisoformat(str(e.created_at))
+            return f"{when:%a} {when.day} {when:%b}"
+    return None
 
 
 def _contact(customer_id: str, **fields: str) -> dict[str, Any]:
@@ -133,10 +194,37 @@ def overview(customer_id: str = Query()) -> dict[str, Any]:
 @router.get("/messages")
 def messages(customer_id: str = Query()) -> list[dict[str, Any]]:
     """The customer's in-app messages (actions_inbox), newest first. A booked call shows its call
-    code: that's the customer's own code, the one place it's meant to be seen."""
-    inbox = actions_inbox(_token(customer_id))
-    return [{k: v for k, v in m.items() if k != "message_id"} | {"n": n}
-            for n, m in reversed(list(enumerate(inbox, start=1)))]
+    code: that's the customer's own code, the one place it's meant to be seen.
+
+    Each message also says whether the app has shown it (seen) and whether the customer has acted
+    on it (answered, with the day): the app badges unseen ones and tucks answered offers away."""
+    token = _token(customer_id)
+    inbox = actions_inbox(token)
+    sent, history = _message_entries(token)
+    if len(sent) != len(inbox):                          # can't happen: same filter as actions_inbox
+        raise HTTPException(500, "Your messages couldn't be loaded. Please try again.")
+    seen = _seen_hashes([e.hash for e in sent])
+    result = []
+    for n, (m, e) in enumerate(zip(inbox, sent), start=1):
+        answered_on = _answered_on(e, history)
+        result.append({k: v for k, v in m.items() if k != "message_id"}
+                      | {"n": n, "id": e.hash, "seen": e.hash in seen,
+                         "answered": answered_on is not None, "answered_on": answered_on})
+    return list(reversed(result))
+
+
+@router.post("/messages/seen")
+def messages_seen(body: SeenMessages) -> dict[str, int]:
+    """The app has shown these messages: they're no longer new (clears the unread badge).
+    Only this customer's own messages can be marked."""
+    sent, _ = _message_entries(_token(body.customer_id))
+    mine = {e.hash for e in sent}
+    ids = [i for i in dict.fromkeys(body.ids) if _HASH.match(i) and i in mine]
+    when = now().isoformat(timespec="seconds")
+    with closing(_seen_db()) as conn:                   # a tiny write: no need to wait for a running sweep
+        conn.executemany(f"INSERT OR IGNORE INTO {SEEN_TABLE} (message_hash, seen_at) VALUES (?, ?)",
+                         [(i, when) for i in ids])
+    return {"marked": len(ids)}
 
 
 @router.get("/promises")

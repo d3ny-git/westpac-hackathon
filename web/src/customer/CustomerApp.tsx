@@ -17,7 +17,7 @@ import { PassCode } from '@westpac/ui/pass-code';
 import { Select } from '@westpac/ui/select';
 import { Textarea } from '@westpac/ui/textarea';
 import { VisuallyHidden } from '@westpac/ui/visually-hidden';
-import { FormEvent, ReactNode, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { errorText, post, useAction, useApi, useMeta } from '../api';
 import { ErrorAlert, Loading } from '../components';
@@ -130,7 +130,8 @@ function SignIn({ onSignIn }: { onSignIn: (id: string) => void }) {
 
 function Tabs({ route, customerId }: { route: string; customerId: string }) {
   const inbox = useApi<CustomerMessage[]>(`/api/customer/messages?customer_id=${customerId}`);
-  const count = inbox.data?.length ?? 0;
+  // Only messages that are new (not opened yet) and still need something from the customer.
+  const count = inbox.data?.filter(m => !m.seen && !m.answered).length ?? 0;
   return (
     <nav aria-label="App" className="mb-3 flex flex-wrap gap-1">
       {TABS.map(t => (
@@ -218,22 +219,49 @@ function Home({ customerId }: { customerId: string }) {
 function Messages({ customerId, openHelp }: { customerId: string; openHelp: (mode: 'form' | 'callback') => void }) {
   const inbox = useApi<CustomerMessage[]>(`/api/customer/messages?customer_id=${customerId}`);
   const messages = inbox.data ?? [];
+  const markSeen = useAction((ids: string[]) => post('/api/customer/messages/seen', { customer_id: customerId, ids }));
+  // Messages that were new while this screen was open keep their "New" label until you leave it.
+  const fresh = useRef(new Set<string>());
+  const [, redraw] = useState(0);
+  const [showEarlier, setShowEarlier] = useState(false);
+
+  useEffect(() => {
+    const unseen = messages.filter(m => !m.seen && !fresh.current.has(m.id)).map(m => m.id);
+    if (unseen.length === 0) return;
+    unseen.forEach(id => fresh.current.add(id));
+    redraw(n => n + 1);
+    markSeen.mutate(unseen); // clears the badge
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inbox.data]);
+
+  const current = messages.filter(m => !m.answered);
+  const earlier = messages.filter(m => m.answered);
+  const hasNew = current.some(m => fresh.current.has(m.id));
   return (
     <>
       <Heading size={6} tag="h1" className="mb-2">
         Messages
       </Heading>
       {inbox.error && <ErrorAlert error={inbox.error} />}
-      {inbox.data && messages.length === 0 && <Alert look="info">No messages yet.</Alert>}
-      {messages.length > 0 && (
+      {inbox.data && current.length === 0 && (
+        <Alert look="info">{earlier.length ? "You're all caught up." : 'No messages yet.'}</Alert>
+      )}
+      {hasNew && (
         // The lock screen never shows details.
         <Alert look="info" heading="On your lock screen" className="mb-3" data-testid="lock-screen">
-          {messages[0].lock_screen}
+          {current[0].lock_screen}
         </Alert>
       )}
-      {messages.map(m => (
-        <Card key={m.n} testId={`message-${m.kind}`}>
-          <p className="typography-body-9 font-bold text-text-heading">{m.in_app_title}</p>
+      {current.map(m => (
+        <Card key={m.id} testId={`message-${m.kind}`}>
+          <p className="flex items-center gap-1 typography-body-9 font-bold text-text-heading">
+            {m.in_app_title}
+            {fresh.current.has(m.id) && (
+              <Badge color="danger" type="pill" tag="span" data-testid="message-new">
+                New
+              </Badge>
+            )}
+          </p>
           <p className="mt-1 typography-body-10 text-text-body">{m.in_app_body}</p>
           {m.kind === 'QUIET_HELP' ? (
             <>
@@ -273,6 +301,22 @@ function Messages({ customerId, openHelp }: { customerId: string; openHelp: (mod
           )}
         </Card>
       ))}
+      {earlier.length > 0 && (
+        <div className="mt-3" data-testid="earlier-messages">
+          <Button look="faint" soft size="small" onClick={() => setShowEarlier(v => !v)} aria-expanded={showEarlier}>
+            {showEarlier ? 'Hide' : 'Show'} earlier messages ({earlier.length})
+          </Button>
+          {showEarlier &&
+            earlier.map(m => (
+              <Card key={m.id} testId={`earlier-${m.kind}`}>
+                <p className="typography-body-9 font-bold text-text-muted">{m.in_app_title}</p>
+                <p className="mt-1 typography-body-10 text-text-muted">
+                  You asked for help on {m.answered_on}. We'll be in touch: see Our promises.
+                </p>
+              </Card>
+            ))}
+        </div>
+      )}
     </>
   );
 }
