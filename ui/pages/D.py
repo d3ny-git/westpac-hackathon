@@ -209,8 +209,8 @@ if use_ai is not None:
         st.session_state.last_run = agent.run(SWEEP, ai=use_ai).run_id
     st.rerun()
 
-runs = sorted((p for p in agent.RUNS_DIR.glob("*.jsonl") if p.name != "llm_calls.jsonl"), reverse=True) \
-    if agent.RUNS_DIR.exists() else []
+# Only policy sweeps: other runbooks (e.g. A's and B's, run by reset_demo.py) log here too.
+runs = sorted(agent.RUNS_DIR.glob("*-policy_sweep-*.jsonl"), reverse=True) if agent.RUNS_DIR.exists() else []
 if runs:
     names = [p.stem for p in runs]
     default = names.index(st.session_state["last_run"]) if st.session_state.get("last_run") in names else 0
