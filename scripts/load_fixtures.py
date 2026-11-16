@@ -3,6 +3,7 @@
     python scripts/load_fixtures.py                  # stage "start" (the demo's starting point)
     python scripts/load_fixtures.py --stage full     # everything, up to E's actions
     python scripts/load_fixtures.py --reset          # wipe an existing ledger first
+    python scripts/load_fixtures.py --step hero-form # hero submits the hardship form (stand-in for Node B)
 
 Stages (the SPEC's story for hero, cust_af4200):
 
@@ -14,6 +15,13 @@ Stages (the SPEC's story for hero, cust_af4200):
           (approvals, a Quiet Help push, a meeting booked with call code U5PXLW, ...).
           R-0005 is still awaiting approval, so E's approval queue isn't empty, and P3 has
           a real call code to check.
+
+Stand-in for Node B's form (FLOW-2):
+
+  --step hero-form   adds what Node B would write when hero submits the hardship form through
+                     B's mock input form (B5): hero's new INTERACTION score (50) and the 21-day
+                     HARDSHIP_RESPONSE promise. It's B's own mock output, so this is only a
+                     temporary stand-in until B's real form exists. It doesn't reset anything.
 
 Where the data comes from: mock_input_output/ (A, B and E samples), plus the few extra entries
 in data/fixtures/seed_extras.json. Nothing is copied, so there's only ever one version of it.
@@ -85,14 +93,46 @@ def plan(stage: str = "start") -> list[dict]:
         return entries
 
     # 3. full: hero submits the hardship form (new B score + a 21-day HARDSHIP_RESPONSE promise) ...
-    entries += [entry("SCORE", s) for s in b_scores if _is_hero_form("SCORE", s)]
-    entries += [entry("PROMISE", p) for p in promises if _is_hero_form("PROMISE", p)]
+    entries += hero_form_entries()
     # ... Node D recommends ...
     entries += [entry("RECOMMENDATION", r) for r in _json(MOCK / "E_actions/input/recommendations.json")]
     # ... and Node E carries out what people approved.
     entries += [entry(w["entry_type"], w["data"], w["customer_token"])
                 for w in _json(MOCK / "E_actions/output/ledger_writes.json")]
     return entries
+
+
+def hero_form_entries() -> list[dict]:
+    """What Node B writes when hero submits the hardship form (from B's mock output):
+    hero's new INTERACTION score (50 MODERATE) and the HARDSHIP_RESPONSE promise (due 1 Dec 17:00)."""
+    b_scores = _json(MOCK / "B_interaction/output/interaction_scores.json")
+    promises = _json(MOCK / "B_interaction/output/promises.json")
+    return ([{"entry_type": "SCORE", "customer_token": s["customer_token"], "data": s, "created_at": None}
+             for s in b_scores if _is_hero_form("SCORE", s)]
+            + [{"entry_type": "PROMISE", "customer_token": p["customer_token"], "data": p, "created_at": None}
+               for p in promises if _is_hero_form("PROMISE", p)])
+
+
+def hero_form_submitted(*, db_path: Optional[Path | str] = None) -> bool:
+    """True if hero's hardship form is already in the ledger."""
+    return any(e.data.get("promise_type") == "HARDSHIP_RESPONSE"
+               for e in store.read(customer_token=HERO, entry_type="PROMISE", db_path=db_path))
+
+
+def submit_hero_form(*, db_path: Optional[Path | str] = None) -> int:
+    """FLOW-2 stand-in for Node B: hero submits the hardship form. Returns the entries added.
+
+    Refuses on an empty ledger (load a stage first) and if the form is already in the ledger.
+    Remove this once Node B's real mock input form (B5) writes these entries itself.
+    """
+    if store.count(db_path=db_path) == 0:
+        raise SystemExit("The ledger is empty. Load a stage first.")
+    if hero_form_submitted(db_path=db_path):
+        raise SystemExit("Hero's hardship form is already in the ledger.")
+    entries = hero_form_entries()
+    for e in entries:
+        store.append(e["entry_type"], e["customer_token"], e["data"], db_path=db_path)
+    return len(entries)
 
 
 def load(stage: str = "start", *, db_path: Optional[Path | str] = None, reset: bool = False) -> int:
@@ -138,9 +178,16 @@ def main() -> None:
     parser.add_argument("--stage", choices=STAGES, default="start", help="how far through the story (default: start)")
     parser.add_argument("--reset", action="store_true", help="wipe the existing ledger first")
     parser.add_argument("--db", help="ledger file (default: GUARDIAN_DB or data/guardian.db)")
+    parser.add_argument("--step", choices=["hero-form"],
+                        help="add one story step to the current ledger instead of loading a stage")
     args = parser.parse_args()
 
     db = Path(args.db or os.getenv("GUARDIAN_DB", store.DEFAULT_DB))
+    if args.step == "hero-form":
+        added = submit_hero_form(db_path=db)
+        print(f"Hero submitted the hardship form (stand-in for Node B): {added} entries added to {db}.\n")
+        print(summary(db))
+        return
     added = load(args.stage, db_path=db, reset=args.reset)
     print(f"Loaded stage '{args.stage}' into {db}: {added} entries.\n")
     print(summary(db))
