@@ -27,7 +27,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | D-5 Explain: `explain(entry_id)` gives the facts behind any decision or recommendation (as known at the time, call codes hidden); `explain_in_words()` has the AI rephrase them for staff | Done |
 | D-6 Policy tools: `policy_check_action`, `policy_deadlines`, `policy_recommend`, `policy_explain` (the server now has 9 tools) | Done |
 | D-7 `agent.py`: runs a runbook with the AI, keeping it on script (only the listed tools, in order, with the runbook's arguments). **A and B can now write and run their runbooks** ([runbooks/README.md](runbooks/README.md)) | Done |
-| Next for Owner-CD: D-8 (stop rules, `--no-ai`, policy sweep runbook), then the D page (D-9) | In progress |
+| D-8 Runbooks: stop rules (e.g. stop if the ledger was tampered with), `--no-ai` mode (same steps, no AI: identical ledger), `policy_sweep.md`, `execute.md` (waits for E's tools) | Done |
+| Next for Owner-CD: D-9 the D page | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -140,6 +141,7 @@ python server.py --list          # list every MCP tool, grouped by node (works t
 python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)
 streamlit run ui/pages/C.py      # the ledger page (works today)
 python agent.py runbooks/ledger_check.md   # the AI runs a runbook (works today, needs .env)
+python agent.py runbooks/policy_sweep.md --no-ai   # the policy sweep without the AI (works today)
 python scripts/reset_demo.py     # generate -> sanitize -> run A and B workflows (--no-ai)
 streamlit run ui/app.py
 ```
