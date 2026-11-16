@@ -4,7 +4,8 @@ React UI (web/dist) served at /.
     python app.py                       # http://127.0.0.1:8600 (see app.py)
 
 Rules (docs/REACT_UI_PLAN.md):
-  - bound to 127.0.0.1 only (app.py); CORS only for the Vite dev server (npm run dev)
+  - bound to 127.0.0.1 by default (app.py; --host opens it to a network, for filming only);
+    CORS only for the Vite dev server (npm run dev)
   - invalid input -> 422; LedgerError / PolicyError / ExecutionError -> 400 with their readable message
   - every JSON response is PII-checked with shared.pii_guard.find_pii (defence in depth); anything
     that looks like PII is blocked with a 500 that names only the KIND of PII. The only exceptions are

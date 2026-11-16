@@ -30,6 +30,21 @@ Open three tabs:
 **Reset** in the walkthrough: Home → Demo controls → **Reset demo (real pipeline)**. The live apps have
 no demo buttons. Sign in on the phone as **Jane Citizen** and on the dashboard as **staff_19c**.
 
+### On a real phone (filming only)
+By default the app only answers this laptop. To open the customer app on a real phone:
+
+1. Turn on **your own phone's hotspot** and connect the laptop to it (not venue or office Wi-Fi).
+2. Start with `python app.py --live --host 0.0.0.0`. It prints a warning and the address for the
+   phone, e.g. `http://192.168.43.20:8600/customer/`. Open that on the phone.
+3. There's **no real login**: anyone on that network could open both apps and the API. All the data
+   is fake, but stop the app (Ctrl+C) and switch the hotspot off when you're done.
+4. If the phone can't connect, the laptop's firewall may be blocking the port: allow it while
+   filming (e.g. `sudo ufw allow 8600/tcp`, then `sudo ufw delete allow 8600/tcp` afterwards).
+
+**Android over USB, with no network at all:** keep the default (no `--host`), connect the phone by
+USB with USB debugging on, run `adb reverse tcp:8600 tcp:8600`, and open
+`http://localhost:8600/customer/` on the phone.
+
 ## What happens by itself
 
 The dashboard's live bar shows "Automatic sweeps on". Every 30 seconds the worker checks whether
