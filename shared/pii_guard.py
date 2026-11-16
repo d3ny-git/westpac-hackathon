@@ -166,6 +166,11 @@ def _check_output(result: Any) -> Any:
     return clean
 
 
+# Error classes from our own nodes whose messages are written for people (no PII, no internals),
+# so the AI may read them. Any other exception is treated as a crash and its details are withheld.
+EXPECTED_ERRORS = {"LedgerError", "PolicyError", "ExecutionError", "AccountError", "InteractionError", "ToolError"}
+
+
 def _explain_failure(exc: Exception) -> Exception | None:
     """Turn failures we expect into a readable error for the AI. Return None for real crashes."""
     if isinstance(exc, PIIError):
@@ -175,7 +180,7 @@ def _explain_failure(exc: Exception) -> Exception | None:
         problems = "; ".join(f"{'.'.join(str(p) for p in e['loc']) or 'input'}: {e['msg']}"
                              for e in exc.errors(include_input=False, include_url=False))
         return _tool_error(f"Invalid data: {problems}")
-    if type(exc).__name__ in {"LedgerError", "PolicyError", "ToolError"}:   # expected refusals from our own code
+    if type(exc).__name__ in EXPECTED_ERRORS:                 # expected refusals from our own code
         return _tool_error(str(exc))
     return None
 
