@@ -144,3 +144,49 @@ A background worker in the app process (one at a time, using the existing `RUN_L
   Submit the form and watch the AI assessment and the sweep summary appear without clicking anything.
 - The walkthrough at `/` and the Streamlit pages are unchanged and their tests pass.
 - `npm run build`, `tsc`, the fresh-setup check, and the diff check that nothing on `main` changed.
+
+---
+
+# Status on the branch `ui/live-apps`
+
+All tickets L-1..L-5 are done. How to run it: `docs/LIVE_DEMO.md`.
+
+## Deviations from the plan (and why)
+- **Entry pages:** `web/customer/index.html` and `web/westpac/index.html` (not `web/customer.html`). They build
+  to `web/dist/customer/` and `web/dist/westpac/`, which the existing static serving already answers at
+  `/customer/` and `/westpac/`, so `app.py` gained only the `--live` flag (and two lines printing the URLs),
+  with no new routes.
+- **Approve / reject on the dashboard** go through two small endpoints in `api/westpac.py` that call the
+  existing `approve_rec` / `reject_rec` (the human-only functions, staff token required) and then wake the
+  worker. The walkthrough's own approve endpoints are unchanged.
+- **Without `--live`,** a customer submission's intake review runs straight away in the request (with the
+  AI if available), so New contacts still works; the sweeps and "carry out" stay manual.
+- **Detecting change:** the cycle's "something changed" check includes whether the chain is still valid
+  (an insider edit moves neither the ledger's size nor its head), and a reset from the walkthrough clears
+  the New contacts feed (detected as the ledger shrinking or the last-seen entry changing: a reset rebuilds
+  byte-identical first entries).
+- **The AI switch:** `GUARDIAN_LIVE_AI=0` turns the AI off for the worker (tests, the repeatable e2e);
+  `GUARDIAN_LIVE_INTERVAL` changes the 30 s period (the e2e uses 2 s). Run logs go to `data/runs/` (or
+  `GUARDIAN_RUNS_DIR`) as before; the New contacts feed is kept in memory (it restarts empty).
+- **New types and helpers** for the two apps are in new files (`web/src/live/*`) instead of additions to
+  `web/src/api.ts` / `components.tsx`; those two files are unchanged.
+- **The live e2e** has its own config, `web/e2e/live.config.ts` (`npx playwright test -c e2e/live.config.ts`,
+  port 8661), so the walkthrough's `playwright.config.ts` and its 5 specs are untouched.
+- **`tests/test_api.py` (local):** its pinned allow-list now includes the two customer-only views, and its
+  "every other response is checked" sweep passes a `customer_id` to the customer endpoints. These are the
+  only test changes; the plan's RAW_VIEWS addition requires them.
+- **Worktree:** the agent's sandbox can only write inside its own worktree, so the `ui/live-apps` worktree is
+  nested at `.claude/worktrees/agent-aaa5cd918b74186b4/.live-apps` instead of `.claude/worktrees/live-apps`.
+
+## Test status (latest run)
+- `python -m pytest`: 525 passed (499 from `ui/gel-react`, with the 2 allow-list edits above, + 26 in
+  `tests/test_live.py`: customer API (own data only, nothing internal leaks, PII rules), the scheduler
+  (idle → no runs and no AI calls; a change → one cycle; approval → carried out; rejection → nothing sent;
+  AI failure → fallback with a byte-identical ledger; the AI assessment and sweep summary when the AI
+  works; reset clears the feed; tamper stops the sweep; the background thread), and every Westpac
+  response PII-free and PII-checked, with call codes hidden)
+- `npm run build`, `npx tsc --noEmit`: pass
+- Playwright: the walkthrough's 5 specs pass unchanged; the two-window live story passes (sweeps on, AI off)
+- Manual run with the AI on (`python app.py --live`, real OpenRouter key): the automatic sweep wrote a
+  real AI summary on Overview, Jane's hardship form got a real AI assessment on New contacts (built only
+  from the sanitized results: no name, no phone), and an idle server made no further runs or AI calls.
