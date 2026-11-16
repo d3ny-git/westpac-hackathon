@@ -16,7 +16,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | `shared/`: `llm.py` (AI gateway), `pii_guard.py` (PII check + `@safe_tool`), `config.py`, `schemas.py` | Done ([shared/README.md](shared/README.md)) |
 | C-2 Ledger store: `store.append()`, `read()`, `next_id()` | Done |
 | C-7 MCP server: `server.py` + `scripts/try_tool.py`. **A, B, E can now add their tools** ([nodes/README.md](nodes/README.md)) | Done |
-| Next for Owner-CD: C-3 hash-chain check, C-5/C-6 ledger logic, D policy agent, `agent.py` | In progress |
+| C-3 Tamper check: `verify_chain()` + `ledger_verify_chain` tool | Done |
+| Next for Owner-CD: C-5/C-6 ledger logic, D policy agent, `agent.py` | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline

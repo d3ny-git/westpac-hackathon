@@ -4,8 +4,8 @@ All ledger tools are READ-ONLY. Writing (store.append) is plain Python only, so 
 never add, change or remove ledger entries.
 
 Tools:
-    ledger_get_history              (C-7, now)
-    ledger_verify_chain             (added in C-3)
+    ledger_get_history              (C-7)
+    ledger_verify_chain             (C-3)
     ledger_combined_score           (added in C-5)
     ledger_quiet_help_candidates    (added in C-6)
     ledger_risk_dashboard           (added in C-6)
@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Optional
 
 from nodes.ledger import store
+from nodes.ledger.chain import verify_chain
 from shared.config import EntryType
 from shared.pii_guard import safe_tool
 from shared.schemas import CustomerToken
@@ -36,3 +37,15 @@ def register(mcp) -> None:
         Customers are tokens like cust_af4200.
         """
         return store.read(customer_token=customer_token, entry_type=entry_type)
+
+    @mcp.tool()
+    @safe_tool
+    def ledger_verify_chain() -> dict:
+        """Check that nobody has changed, removed or inserted ledger entries since they were written.
+
+        Returns valid (true/false), entries_checked, and if something is wrong: first_bad_entry,
+        problem (EDITED, BROKEN_LINK, MISSING_ENTRY or UNREADABLE) and a one-line detail.
+        Also returns last_entry_id and head_hash (the fingerprint of the newest entry).
+        If valid is false, the ledger can't be trusted: stop and report "LEDGER TAMPERED".
+        """
+        return verify_chain()
