@@ -132,19 +132,19 @@ Each step also returns a "next: go to <page> and do <thing>" hint.
 Every feature of the three Streamlit pages, and where it lives in the React UI.
 
 ### `ui/pages/C.py` → Ledger (C)
-- [ ] Demo controls: load a story stage (start / full), wipes the ledger and the checkpoint
-- [ ] Demo controls: record a checkpoint
-- [ ] Demo controls: simulate an insider edit (disabled on an empty ledger)
-- [ ] Empty ledger: a warning that says how to load demo data
-- [ ] 1. Integrity: chain verified (entries, newest entry, head hash) or LEDGER TAMPERED (problem, entry, detail)
-- [ ] 1. Integrity: checkpoint OK / checkpoint broken / no checkpoint yet
-- [ ] 2. Risk Dashboard: urgency, customer, score + band, promise, due, hours to due, made by, description
-- [ ] 3. Quiet Help list: customer, score, band, reasons, last Quiet Help
-- [ ] 4. Customer lookup: customer picker (hero by default), combined score, A, B, open hardship case, reasons, history
-- [ ] 5. Full ledger: entry, time, customer, type, what, prev hash, hash
-- [ ] 5. Full ledger: filter by entry types and by customers
-- [ ] 5. Full ledger: the first bad entry highlighted when tampered
-- [ ] 5. Full ledger: show one entry in full (JSON)
+- [x] Demo controls: load a story stage (start / full), wipes the ledger and the checkpoint
+- [x] Demo controls: record a checkpoint
+- [x] Demo controls: simulate an insider edit (disabled on an empty ledger)
+- [x] Empty ledger: a warning that says how to load demo data
+- [x] 1. Integrity: chain verified (entries, newest entry, head hash) or LEDGER TAMPERED (problem, entry, detail)
+- [x] 1. Integrity: checkpoint OK / checkpoint broken / no checkpoint yet
+- [x] 2. Risk Dashboard: urgency, customer, score + band, promise, due, hours to due, made by, description
+- [x] 3. Quiet Help list: customer, score, band, reasons, last Quiet Help
+- [x] 4. Customer lookup: customer picker (hero by default), combined score, A, B, open hardship case, reasons, history
+- [x] 5. Full ledger: entry, time, customer, type, what, prev hash, hash
+- [x] 5. Full ledger: filter by entry types and by customers
+- [x] 5. Full ledger: the first bad entry highlighted when tampered
+- [x] 5. Full ledger: show one entry in full (JSON)
 
 ### `ui/pages/D.py` → Policy (D)
 - [ ] Demo controls: load a story stage
