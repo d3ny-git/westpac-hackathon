@@ -75,21 +75,22 @@ function PipelineSection() {
   const p = useApi<Pipeline>('/api/demo/pipeline');
   const d = p.data;
   return (
-    <Section title="The pipeline" caption="Live counts from the ledger. Every action gets written back to C.">
+    <Section title="The pipeline" caption="A → B → C → D → E, live from the clean data and the ledger. A and B both send scores to C; every action gets written back to C.">
       {p.error && <ErrorAlert error={p.error} />}
       {!d ? (
         <Loading />
       ) : (
         <div className="flex flex-col gap-2 md:flex-row">
-          <div className="flex flex-1 flex-col gap-2">
-            <Node id="A" name="Account">
-              <Count n={d.A.account_scores} label="account scores" />
-            </Node>
-            <Node id="B" name="Interactions">
-              <Count n={d.B.interaction_scores} label="interaction scores" />
-              <Count n={d.B.promises} label="promises / requests" />
-            </Node>
-          </div>
+          <Node id="A" name="Account" href="#/account">
+            <Count n={d.A.clean_transactions ?? '–'} label="clean transactions" />
+            <Count n={d.A.account_scores} label="account scores" />
+          </Node>
+          <Arrow />
+          <Node id="B" name="Interactions" href="#/interactions">
+            <Count n={d.B.clean_interactions ?? '–'} label="clean interactions" />
+            <Count n={d.B.interaction_scores} label="interaction scores" />
+            <Count n={d.B.promises} label="promises / requests" />
+          </Node>
           <Arrow />
           <Node id="C" name="Ledger" href="#/ledger">
             <Count n={d.C.entries} label="entries" />
@@ -171,7 +172,7 @@ function StorySection() {
           </div>
           {s.complete ? (
             <Alert look="success" heading="All 10 steps done" data-testid="story-next">
-              The default notice was blocked by P2 and the scam call by P3. Load the 'start' stage to play it again.
+              The default notice was blocked by P2 and the scam call by P3. Reset the demo to play it again.
             </Alert>
           ) : (
             s.next && (

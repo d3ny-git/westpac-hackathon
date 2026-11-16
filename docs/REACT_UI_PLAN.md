@@ -129,10 +129,10 @@ Each step also returns a "next: go to <page> and do <thing>" hint.
 
 ## Feature-parity checklist (merge criterion 1)
 
-Every feature of the three Streamlit pages, and where it lives in the React UI.
+Every feature of the Streamlit pages (C, D, E, and since R-9/R-10 A and B), and where it lives in the React UI.
 
 ### `ui/pages/C.py` → Ledger (C)
-- [x] Demo controls: load a story stage (start / full), wipes the ledger and the checkpoint
+- [x] Demo controls: load a story stage (start / full), wipes the ledger and the checkpoint (now "Load mock fixtures"; the default start is "Reset demo (real pipeline)")
 - [x] Demo controls: record a checkpoint
 - [x] Demo controls: simulate an insider edit (disabled on an empty ledger)
 - [x] Empty ledger: a warning that says how to load demo data
@@ -148,7 +148,7 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 
 ### `ui/pages/D.py` → Policy (D)
 - [x] Demo controls: load a story stage
-- [x] Demo controls: hero submits the hardship form, disabled once it's in the ledger, with its status line (since main #23 D.py points to the B page's form instead; the React UI keeps `load_fixtures.submit_hero_form`, the same path, in Demo controls)
+- [x] Demo controls: hero submits the hardship form → since main #23 (AB-5) this is on the B page's mock input form; the React UI does the same (Interactions (B) → 'Fill in: hero's hardship form' → Submit), and D's status line ("Hero's hardship form is in the ledger" / "submit it on the B page") is in the shared Demo controls
 - [x] 1. Check an action: customer, action (collections, credit offers, VERIFY_CALLER), requested by, call code → ALLOW / BLOCK box with policy, flags and reason, and the entry it was recorded as
 - [x] 1. Check an action: a readable warning when the check can't run (e.g. VERIFY_CALLER with no code)
 - [x] 2. Deadlines (P1): level, customer, promise, due, hours to due, reason; "none" message
@@ -169,10 +169,32 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 - [x] Caller verification (P3): type the code the caller quoted → genuine / possible scam, recorded in the ledger; warning when empty; never shows the real code
 - [x] Activity & Status: recommendation status table, ledger activity table (newest first), "append-only, no reset here" note
 
+### `ui/pages/A.py` → Account (A) (R-9)
+- [x] Demo controls: Reset demo (real pipeline), Start empty (A and B not run yet), with the "then run A, then B" note
+- [x] No clean data yet: a warning that says how to reset
+- [x] 1. Raw → clean: every raw column marked kept / becomes customer_token / dropped (personal information)
+- [x] 1. One customer's first raw transaction (picker by name) next to its clean row (local view)
+- [x] 1. Clean file summary (transactions, customers, date range) or an error if the columns are wrong
+- [x] 2. Run Node A's workflow with / without the AI: status, error, each step's output, summary
+- [x] 3. Account scores: customer, score, band, reasons, the five signals, in the ledger (yes / not yet)
+- [x] 3. The rules (expandable)
+- [x] 4. Node A's SCORE entries, newest first, or "hasn't written any scores yet"
+
+### `ui/pages/B.py` → Interactions (B) (R-10)
+- [x] Demo controls: Reset demo (real pipeline), Start empty
+- [x] No clean data yet: a warning that says how to reset
+- [x] 1. Run Node B for all customers with / without the AI: "ran for N customers" + customer, status, score, score written, promises written; a ResetError shown
+- [x] 2. Mock input form: customer (fake names), handled by staff or self-service, date (demo date), channel, type, form status only for HARDSHIP_FORM, call back on / at only for CALLBACK_REQUEST (+2 days 14:00), free text, use-the-AI switch
+- [x] 2. "Fill in: hero's hardship form (SPEC step 6)" and "Fill in: steady_bnpl's chat"
+- [x] 3. After submit: Kept (clean row) vs Thrown away (local view), "the text became the flags … and was deleted"
+- [x] 3. Node B's workflow run: status, each step's output, summary
+- [x] 4. The customer now: combined score, interaction score (B), open hardship case, promises table (or "No promises")
+- [x] 5. All clean interactions (tokens and flags only) and Node B's ledger entries (SCORE / PROMISE)
+
 ### New in the React UI
-- [x] Home: C → D → E pipeline with live counts per node
+- [x] Home: A → B → C → D → E pipeline with live counts per node (clean data for A and B, the ledger for C–E)
 - [x] Home: the 10-step story ticks itself, with a "next: go to … and do …" hint
-- [x] Demo controls in one shared panel (load stage, hero form, insider edit, checkpoint)
+- [x] Demo controls in one shared panel (real-pipeline reset, start empty, mock fixtures, checkpoint, insider edit)
 - [x] One tab, always fresh (TanStack Query refetch on focus + every 3 s, invalidated after every button)
 
 ## Deviations from the plan (and why)
@@ -211,13 +233,67 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
   test passes unchanged. `tests/test_api.py` is kept local like the other test files.
 - **Main merged in (Nov 16, #19–#24: A/B nodes, real pipeline, start-empty demo).** The branch follows
   main's changes: the run-log list shows policy sweeps only (as D.py now does), the e2e also isolates
-  `GUARDIAN_CLEAN_DIR`, and `app.py` relies on agent.py's new `GUARDIAN_RUNS_DIR`. Not ported (outside
-  this plan, which covers C, D and E): the new **A and B pages** (`ui/pages/A.py`, `B.py`, incl. B's
-  mock input form) and a **"reset demo (real pipeline)"** button for `scripts/reset_demo.py`. The React
-  UI works on a ledger built by `reset_demo.py` too; these would be the natural next tickets.
+  `GUARDIAN_CLEAN_DIR`, and `app.py` relies on agent.py's new `GUARDIAN_RUNS_DIR`. The A and B pages
+  and the real-pipeline demo followed as R-8..R-11 (below).
+
+# R-8..R-11: Account (A), Interactions (B) and the start-empty demo (added after the first review)
+
+The user asked for main's A and B Streamlit pages (AB-5, #23) and the start-empty demo (#24) in GEL too,
+still on this branch only. Same rules: only new files under `api/`, `web/`, `app.py`,
+`requirements-web.txt` and these docs; every endpoint wraps an existing, tested function.
+
+| Ticket | What | Done when |
+|---|---|---|
+| **R-8** | API: `api/account.py`, `api/interaction.py`, `POST /api/demo/reset` (`reset_demo.reset`, real pipeline or `empty=true`), the PII-check allow-list for the raw views | A/B endpoints tested incl. errors, the allow-list pinned, typed PII never stored or returned outside the raw views |
+| **R-9** | Account (A) page in GEL | Parity with `ui/pages/A.py` (checklist above) |
+| **R-10** | Interactions (B) page in GEL with the mock input form | Parity with `ui/pages/B.py` (checklist above) |
+| **R-11** | Demo controls (real-pipeline reset first, start empty, hero-form button retired), Home A → B → C → D → E, story hints, e2e, docs | Story e2e does step 6 on the B page; start-empty and B-privacy specs pass |
+
+| Area | Endpoint | Existing function |
+|---|---|---|
+| A | `GET /api/account/overview` | raw column names vs `CLEAN_TRANSACTION_COLUMNS`, `account.check_data()` |
+| | `GET /api/account/raw-sample?customer_id=` **(raw view)** | the raw row + `sanitize.sanitize_transactions([row])[0]` |
+| | `GET /api/account/scores` · `/rules` · `/entries` | `score_all_customers`, `account_signals`, `account.RULES`, A's SCORE entries |
+| | `POST /api/account/run?ai=` | `agent.run(runbooks/a_account.md, ai, server=…)` |
+| B | `GET /api/interaction/form-options` **(raw view)** | B.py's `fake_customers` / `fake_staff` (copied), the 2 examples in `form_submissions.json` |
+| | `POST /api/interaction/submit` (**`thrown_away` field** is the raw view) | `sanitize.add_interaction(raw)` → `agent.run(runbooks/b_interaction.md, {"token"}, ai)` → `combined_score`, `has_open_hardship_case`, `interaction.customer_promises` |
+| | `POST /api/interaction/run-all?ai=` | `reset_demo.run_node_b_for_everyone(server, ai)` (`ResetError` → 400) |
+| | `GET /api/interaction/overview` | the clean interactions, B's SCORE(INTERACTION) + PROMISE entries |
+| Demo | `POST /api/demo/reset {empty}` | `reset_demo.reset(quiet=True[, empty=True])` (`ResetError` → 400) |
+
+**PII rule for the raw views.** The raw panels and the form are LOCAL views for the demo (MCP_PLAN §6:
+they never go through MCP or the AI), so they legitimately show the fake PII. `api/main.py` has ONE
+explicit allow-list, `RAW_VIEWS`: A's raw sample, B's form options (pickers + examples), and only the
+`thrown_away` field of B's submit response. Every other response, every other field of the submit
+response and every error response is still checked with `find_pii`. The raw submission is never stored
+or logged: `add_interaction` writes only the clean row, the runbook only gets the customer's token,
+uvicorn's access log is off, and error messages never echo the input. `tests/test_api.py` pins the
+allow-list, makes the PII check flag everything to prove every other GET (and the rest of submit) is
+blocked, and checks that a name + phone typed into the form appear in no clean file, ledger entry,
+run log or non-raw response; the Playwright B-privacy spec checks the Ledger page too.
+
+### Deviations (R-8..R-11)
+- **The hero-form button is retired** from Demo controls (as main did on D.py): step 6 is the B page's
+  form, and the story hint says so. `POST /api/demo/hero-form` stays in the API as the scripted shortcut
+  (main kept `load_fixtures --step hero-form` too); no button uses it.
+- **"Load demo data" is now "Load mock fixtures"**, below the real-pipeline reset and start-empty
+  buttons. The insider-edit and ledger-filter e2e specs still use the fixtures, because they check fixed
+  entry IDs (E-0004, 40 entries).
+- **Endpoints are grouped** per page section: A's people picker comes with the raw sample (one raw view,
+  not two), and B's pickers come with the examples and the form's choices and defaults.
+- **Form fields:** dates and times use GEL `Input` with `type="date"` / `type="time"` rather than GEL's
+  `DatePicker` (a calendar widget for picking dates relative to today; the demo pins dates to
+  16 Nov 2026). The use-the-AI option is a GEL `Switch`.
+- **Home pipeline** is one row A → B → C → D → E (the tiles for A and B show the clean data and their
+  scores); the SPEC's diagram has A and B both feeding C, which the caption says.
+- **Commits:** R-9 and R-10 are one commit (App.tsx's navigation imports both pages, so neither half
+  builds alone).
 
 ## Test status (latest run on the branch)
-- `python -m pytest`: 477 passed (422 existing tests after merging main #19–#24, + 55 in `tests/test_api.py`)
+- `python -m pytest`: 499 passed (422 existing tests + 77 in `tests/test_api.py`, 22 of them for A, B
+  and the real-pipeline demo)
 - `cd web && npm run build` and `npx tsc --noEmit`: pass
-- `npx playwright test`: 3 passed (the 10-step story with no-AI sweeps and the call code read from the
-  phone; insider edit caught + sweep stops; ledger filters)
+- `npx playwright test`: 5 passed: the 10-step story from a real-pipeline reset, with step 6 on the B
+  page's form, no-AI sweeps and the call code read from the phone; start empty → run A (9 entries) →
+  run B for all (19) with the same head hash as a one-click reset; B privacy (a typed name and phone are
+  thrown away and never reach the Ledger page); insider edit caught + sweep stops; ledger filters

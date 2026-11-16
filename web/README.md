@@ -2,7 +2,7 @@
 
 A second UI for Customer Guardian, built with Westpac's design system **GEL** (`@westpac/ui` 1.21 +
 `@westpac/style-config`, WBC brand, Tailwind CSS v4), on branch `ui/gel-react`. It has the same
-features as the Streamlit pages (`ui/pages/C.py`, `D.py`, `E.py`), which stay unchanged, plus a
+features as the Streamlit pages (`ui/pages/A.py`, `B.py`, `C.py`, `D.py`, `E.py`), which stay unchanged, plus a
 Home page whose 10-step story guide ticks itself as the demo is played.
 
 - `api/` (Python, FastAPI) wraps the existing node functions as JSON. No business logic lives there.
@@ -37,14 +37,15 @@ python app.py                    # http://127.0.0.1:8600
 python app.py --port 8650        # another port
 ```
 
-It uses the same ledger as everything else: `GUARDIAN_DB` (environment or `.env`), else
-`data/guardian.db`. To try it without touching the demo ledger, point it at a temporary file:
+It uses the same data as everything else: the ledger `GUARDIAN_DB` (environment or `.env`), else
+`data/guardian.db`; the clean data `GUARDIAN_CLEAN_DIR`, else `data/clean`; the run logs
+`GUARDIAN_RUNS_DIR`, else `data/runs`. To try it without touching any of them, use temporary ones:
 
 ```bash
-GUARDIAN_DB=/tmp/guardian-try.db GUARDIAN_RUNS_DIR=/tmp/guardian-try-runs python app.py
+GUARDIAN_DB=/tmp/guardian-try.db GUARDIAN_CLEAN_DIR=/tmp/guardian-try-clean GUARDIAN_RUNS_DIR=/tmp/guardian-try-runs python app.py
 ```
 
-Then open http://127.0.0.1:8600, use **Demo controls → Load demo data** (stage `start`) and follow the
+Then open http://127.0.0.1:8600, use **Demo controls → Reset demo (real pipeline)** (or **Start empty** and run A and B on their pages) and follow the
 Home page's guide, or `docs/DEMO.md`. Policy sweeps "with the AI" and "Explain in plain English"
 need the OpenRouter settings in `.env`; everything else works without them.
 
@@ -69,8 +70,8 @@ PYTHON=python npx playwright test   # e2e: the 10-step story in a real browser
 ```
 
 The Playwright run builds the UI and starts `app.py --port 8650` itself, against a temporary
-`GUARDIAN_DB` and run-log folder (under the system temp folder, or `GUARDIAN_E2E_DIR`), so the demo
-ledger is never touched. It never calls the AI. Set `PYTHON` to the interpreter that has the
+`GUARDIAN_DB`, clean-data and run-log folder (under the system temp folder, or `GUARDIAN_E2E_DIR`), so the demo
+data is never touched. It never calls the AI. Set `PYTHON` to the interpreter that has the
 requirements installed.
 
 ## Rules the UI keeps
@@ -79,6 +80,9 @@ requirements installed.
   tools, and they need a staff token.
 - A call code is shown only in the customer's phone view (`GET /api/actions/inbox/{token}`); the
   ledger view, explanations and run logs show `(hidden)`.
-- Every JSON response is checked for PII (`shared.pii_guard.find_pii`) before it leaves the server.
+- Every JSON response is checked for PII (`shared.pii_guard.find_pii`) before it leaves the server,
+  except the A and B pages' local raw views of the fake demo data (one explicit allow-list,
+  `RAW_VIEWS` in `api/main.py`). What's typed into B's mock form is never stored: only the sanitized
+  row is.
 - The server binds to 127.0.0.1 only. All times come from `shared.config.now()` (16 Nov 2026 10:00).
 - One tab, always fresh: every view refetches every 3 seconds and on focus, and after every button.

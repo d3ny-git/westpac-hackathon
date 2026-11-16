@@ -60,7 +60,7 @@ export function LedgerPage() {
         <Loading />
       ) : count === 0 ? (
         <Alert look="warning" heading="The ledger is empty">
-          Use <strong>Load demo data</strong> in Demo controls (or run <Code>python scripts/load_fixtures.py</Code>).
+          Use <strong>Reset demo (real pipeline)</strong> in Demo controls (or run <Code>python scripts/reset_demo.py</Code>).
         </Alert>
       ) : (
         <>
