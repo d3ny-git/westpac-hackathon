@@ -1,0 +1,18 @@
+Account:
+    - Summary: Build a hardship score based on information from the customers westpac accounts and transactions.
+    - Requirements: - no PII, code based AI workflow (deterministic), cybersecurity focus.
+ 
+Bank Interactions:
+    - Summary: Build a hardship score based on interactions with the bank, forms filled out and calls made. 
+    - Requirements: - no PII, code based AI workflow (deterministic), cybersecurity focus.
+ 
+Ledger:
+    - Summary: Build a ledger based on the information collected from nodes A and B, and promises made with/by the bank.
+    - Requirements: - no PII, code based (deterministic), cybersecurity focus. Implement Quiet Help. Risk Dashboard is build from here.
+ 
+Policy Enforcement:
+    - Summary: An AI agent that monitors the ledger and enforces policies.
+ 
+Actions/Solutions:
+    - Summary: The solution provided by the bank, either a push notification for hardship (Quiet Help) or books in a meeting.
+    - Requirements: AI can not make decisions, just recommend them.

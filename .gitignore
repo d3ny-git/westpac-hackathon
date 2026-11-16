@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets
+.env
+
+# Generated data (rebuilt by scripts/reset_demo.py)
+data/clean/
+data/guardian.db
+data/runs/
