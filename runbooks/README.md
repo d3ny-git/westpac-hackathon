@@ -55,6 +55,6 @@ Every run is logged step by step to `data/runs/<run_id>.jsonl` (gitignored). The
 | `a_account.md` | A | `account_check_data` → `account_score_all` → `account_publish` → `ledger_verify_chain` |
 | `b_interaction.md` | B | `interaction_score` → `interaction_promises` → `interaction_publish` → `ledger_verify_chain` (with `--var token=…`) |
 | `policy_sweep.md` | CD | `ledger_verify_chain` (stops if tampered) → `policy_deadlines` → `ledger_quiet_help_candidates` → `policy_recommend` |
-| `execute.md` | CD | `ledger_verify_chain` (stops if tampered) → `actions_pending` → `actions_execute_approved` → `ledger_verify_chain`. Ready, but waits for Node E's tools |
+| `execute.md` | CD | `ledger_verify_chain` (stops if tampered) → `actions_pending` → `actions_execute_approved` → `ledger_verify_chain`. Carries out only what a person approved; call codes are hidden from the AI |
 
 A runbook can only use tools that are on the server: check with `python server.py --list`.

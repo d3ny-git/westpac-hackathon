@@ -2,7 +2,8 @@
 """Customer Guardian – Node E Streamlit dashboard.
 
 Human decisions persist in Node C's append-only ledger.
-Execution and caller verification remain disabled until Node D is integrated.
+Approved actions are carried out via actions_execute_approved() (re-checked by Node D first).
+The caller check uses Node D's policy P3.
 """
 
 from pathlib import Path
@@ -14,8 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from nodes.actions import approve, reject, actions_pending, actions_status
+from nodes.actions import (approve, reject, actions_pending, actions_status,
+                           actions_execute_approved, actions_inbox, ExecutionError)
 from nodes.ledger import store
+from nodes.policy import check_action
 from shared.schemas import Recommendation
 
 st.set_page_config(
@@ -323,7 +326,7 @@ with tab1:
                     if st.button(
                         "✓ Approve",
                         key=f"approve_{item['rec_id']}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
 
                         decide(
@@ -337,7 +340,7 @@ with tab1:
                     if st.button(
                         "✕ Reject",
                         key=f"reject_{item['rec_id']}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
 
                         decide(
@@ -351,8 +354,8 @@ with tab1:
         st.subheader("Approved — Awaiting Execution")
 
         st.caption(
-            "Approved actions require a fresh Node D "
-            "policy check before execution."
+            "Each action is re-checked by Node D's policies "
+            "before it is carried out."
         )
 
         if not approved:
@@ -372,15 +375,28 @@ with tab1:
                     f"{item['rec_id']} · {item['customer_token']}"
                 )
 
-                st.button(
-                    "Execute (Node D required)",
+                if st.button(
+                    "▶ Execute",
                     key=f"execute_{item['rec_id']}",
-                    disabled=True,
-                    use_container_width=True,
-                )
+                    width="stretch",
+                ):
+
+                    try:
+                        outcome = actions_execute_approved(item["rec_id"])[0]
+                    except ExecutionError as exc:
+                        st.error(str(exc))
+                    else:
+                        if "blocked" in outcome:
+                            st.error(
+                                f"Blocked by Node D ({outcome['blocked']['policy']}): "
+                                f"{outcome['blocked']['reason']}"
+                            )
+                        else:
+                            st.rerun()
 
         st.caption(
-            "No customer action is sent from this dashboard yet."
+            "Execute writes the action to the ledger and marks it DONE. "
+            "The customer sees it in the Customer Experience tab."
         )
 
 
@@ -434,95 +450,91 @@ with tab2:
             </div>
             """, unsafe_allow_html=True)
 
-            pushes = [
-                entry
-                for entry in ledger_entries
-                if (
-                    entry.customer_token == customer
-                    and entry.entry_type == "ACTION"
-                    and entry.data.get("action") == "QUIET_HELP_PUSH"
-                )
-            ]
+            inbox = actions_inbox(customer)
 
-            if pushes:
+            if inbox:
 
-                st.info(
-                    "You have a new message from Westpac"
-                )
+                # The lock screen never shows details.
+                st.info(inbox[-1]["lock_screen"])
 
-                with st.expander(
-                    "Open message",
-                    expanded=True,
-                ):
+                for n, message in enumerate(inbox):
 
-                    st.write("We are here to help.")
+                    with st.expander(
+                        message["in_app_title"],
+                        expanded=(n == len(inbox) - 1),
+                    ):
 
-                    options = pushes[-1].data.get(
-                        "options", []
-                    )
+                        st.write(message["in_app_body"])
 
-                    for option in options:
+                        if message["kind"] == "QUIET_HELP":
 
-                        st.button(
-                            option.replace("_", " ").title(),
-                            key=f"option_{customer}_{option}",
-                            disabled=True,
-                            use_container_width=True,
-                        )
+                            for option in message["options"]:
+
+                                st.button(
+                                    option.replace("_", " ").title(),
+                                    key=f"option_{customer}_{n}_{option}",
+                                    disabled=True,
+                                    width="stretch",
+                                )
+
+                        else:
+
+                            st.write(
+                                f"Call booked for "
+                                f"{message['meeting_time'][:16].replace('T', ' ')}"
+                            )
+                            st.code(message["call_code"])
 
             else:
 
                 st.caption(
-                    "No Quiet Help message has been "
-                    "executed for this customer."
+                    "No messages have been sent "
+                    "to this customer yet."
                 )
 
         with verify_col:
 
             st.subheader("Caller Verification")
 
-            contacts = [
-                entry
-                for entry in ledger_entries
-                if (
-                    entry.customer_token == customer
-                    and entry.entry_type == "CONTACT_SCHEDULED"
-                )
-            ]
-
-            if contacts:
-
-                st.caption(
-                    "Customer's in-app call code"
-                )
-
-                st.code(
-                    contacts[-1].data["call_code"]
-                )
-
-            else:
-
-                st.info(
-                    "No scheduled contact for this customer."
-                )
-
-            st.text_input(
-                "Code provided by caller",
-                max_chars=6,
-                placeholder="Enter 6-character code",
-                disabled=True,
-            )
-
-            st.button(
-                "Verify Caller (Node D required)",
-                disabled=True,
-                use_container_width=True,
-            )
-
             st.caption(
-                "Verification requires Node D policy P3. "
-                "Matching text alone is not verification."
+                "Someone calls the customer saying they're from Westpac. "
+                "Type the code the CALLER quotes; Node D's policy P3 checks it "
+                "against the calls Westpac really booked."
             )
+
+            # The real code is never shown here: it's only on the customer's phone.
+            quoted = st.text_input(
+                "Code provided by caller",
+                max_chars=12,
+                placeholder="e.g. U5PXLW",
+                key="verify_code",
+            )
+
+            clicked = st.button(
+                "Verify Caller",
+                key="verify_caller",
+                width="stretch",
+            )
+
+            if clicked and not quoted.strip():
+
+                st.warning("Type the code the caller quoted first.")
+
+            elif clicked:
+
+                verdict = check_action({
+                    "customer_token": customer,
+                    "action": "VERIFY_CALLER",
+                    "requested_by": staff,
+                    "call_code": quoted,
+                })
+
+                if verdict.decision == "ALLOW":
+                    st.success(f"✅ Genuine Westpac caller. {verdict.reason}")
+                else:
+                    st.error(f"⛔ Possible scam ({verdict.policy}). {verdict.reason}")
+
+                st.caption("The check is recorded in the ledger.")
 
 
 # ============================================================
@@ -548,7 +560,7 @@ with tab3:
         st.dataframe(
             status_rows,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     else:
@@ -581,7 +593,7 @@ with tab3:
         st.dataframe(
             event_rows,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     else:
