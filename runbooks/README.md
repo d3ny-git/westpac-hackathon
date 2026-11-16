@@ -52,8 +52,8 @@ Every run is logged step by step to `data/runs/<run_id>.jsonl` (gitignored). The
 | File | Owner | Steps |
 |---|---|---|
 | `ledger_check.md` | CD | `ledger_verify_chain` → `ledger_risk_dashboard` |
-| `a_account.md` | A | `account_check_data` → `account_score_all` → `account_publish` → `ledger_verify_chain` |
-| `b_interaction.md` | B | `interaction_score` → `interaction_promises` → `interaction_publish` → `ledger_verify_chain` (with `--var token=…`) |
+| `a_account.md` | A | `account_check_data` (stops on unexpected columns) → `account_score_all` → `account_publish` → `ledger_verify_chain` |
+| `b_interaction.md` | B | `interaction_score` → `interaction_promises` → `interaction_publish` → `ledger_verify_chain` (with `--var token=…`). `scripts/reset_demo.py` runs it for every customer |
 | `policy_sweep.md` | CD | `ledger_verify_chain` (stops if tampered) → `policy_deadlines` → `ledger_quiet_help_candidates` → `policy_recommend` |
 | `execute.md` | CD | `ledger_verify_chain` (stops if tampered) → `actions_pending` → `actions_execute_approved` → `ledger_verify_chain`. Carries out only what a person approved; call codes are hidden from the AI |
 

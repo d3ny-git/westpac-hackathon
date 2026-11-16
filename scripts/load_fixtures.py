@@ -47,11 +47,13 @@ from nodes.ledger import store  # noqa: E402
 from nodes.ledger.chain import verify_chain  # noqa: E402
 from nodes.ledger.dashboard import risk_dashboard  # noqa: E402
 from nodes.ledger.quiet_help import combined_score, has_open_hardship_case, quiet_help_candidates  # noqa: E402
+from shared.config import CLEAN_INTERACTION_COLUMNS, CLEAN_INTERACTIONS_FILE, clean_dir  # noqa: E402
 
 MOCK = REPO / "mock_input_output"
 EXTRAS = REPO / "data" / "fixtures" / "seed_extras.json"
 STAGES = ("start", "full")
 HERO = "cust_af4200"
+HERO_CUSTOMER_ID = "100200301"                     # hero's (fake) bank ID in the raw data
 
 
 def _json(path: Path) -> Any:
@@ -120,19 +122,46 @@ def hero_form_submitted(*, db_path: Optional[Path | str] = None) -> bool:
 
 
 def submit_hero_form(*, db_path: Optional[Path | str] = None) -> int:
-    """FLOW-2 stand-in for Node B: hero submits the hardship form. Returns the entries added.
+    """FLOW-2 stand-in for Node B's mock input form (B5): hero submits the hardship form.
+    Returns how many ledger entries were added.
+
+    When the clean data exists (after `scripts/reset_demo.py`), the form goes through Node B's
+    REAL path, exactly what B5 will do: hero's raw form (with fake PII, from
+    mock_input_output/B_interaction/input/form_submissions.json) is sanitized, added to
+    data/clean/interactions.csv, and published by Node B. Otherwise (a ledger loaded from the
+    mock fixtures) B's mock output for hero is written instead.
 
     Refuses on an empty ledger (load a stage first) and if the form is already in the ledger.
-    Remove this once Node B's real mock input form (B5) writes these entries itself.
+    Remove this once B5's form page exists.
     """
     if store.count(db_path=db_path) == 0:
         raise SystemExit("The ledger is empty. Load a stage first.")
     if hero_form_submitted(db_path=db_path):
         raise SystemExit("Hero's hardship form is already in the ledger.")
+    if (clean_dir() / CLEAN_INTERACTIONS_FILE).exists():
+        return _submit_hero_form_through_node_b(db_path)
     entries = hero_form_entries()
     for e in entries:
         store.append(e["entry_type"], e["customer_token"], e["data"], db_path=db_path)
     return len(entries)
+
+
+def _submit_hero_form_through_node_b(db_path: Optional[Path | str]) -> int:
+    """Sanitize hero's raw form -> add it to the clean interactions -> Node B publishes hero."""
+    import sanitize                                  # scripts may use the sanitizer; MCP code never does
+    from nodes import interaction
+
+    raw_form = next(f for f in _json(MOCK / "B_interaction/input/form_submissions.json")
+                    if f["customer_id"] == HERO_CUSTOMER_ID)
+    clean_file = clean_dir() / CLEAN_INTERACTIONS_FILE
+    rows = sanitize.read_csv(clean_file) + [sanitize.sanitize_interaction(raw_form)]
+    sanitize.write_csv(clean_file, sanitize.sort_interactions(rows), CLEAN_INTERACTION_COLUMNS)
+
+    before = store.count(db_path=db_path)
+    if db_path is not None:
+        os.environ["GUARDIAN_DB"] = str(db_path)     # Node B writes to the default ledger
+    interaction.publish(HERO)
+    return store.count(db_path=db_path) - before
 
 
 def load(stage: str = "start", *, db_path: Optional[Path | str] = None, reset: bool = False) -> int:
