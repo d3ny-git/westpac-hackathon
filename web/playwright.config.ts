@@ -1,7 +1,8 @@
 // Playwright: plays the SPEC's 10-step story in a real browser (npx playwright test).
 //
 // It builds the UI, then starts `python app.py --port 8650` against a TEMPORARY ledger
-// (GUARDIAN_DB) and run-log folder, so the real demo ledger (data/guardian.db) is never touched.
+// (GUARDIAN_DB), run-log folder and clean-data folder, so the real demo ledger (data/guardian.db),
+// data/runs and data/clean are never touched.
 // Set PYTHON to the interpreter with the project's requirements installed (default: python).
 // Never calls the AI: the sweeps run without it.
 import { defineConfig, devices } from '@playwright/test';
@@ -37,6 +38,7 @@ export default defineConfig({
       ...(process.env as Record<string, string>),
       GUARDIAN_DB: join(DATA, 'guardian.db'),
       GUARDIAN_RUNS_DIR: join(DATA, 'runs'),
+      GUARDIAN_CLEAN_DIR: join(DATA, 'clean'), // empty: the hero-form shortcut writes B's mock output
     },
   },
 });

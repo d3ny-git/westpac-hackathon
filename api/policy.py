@@ -101,10 +101,11 @@ def sweep(ai: bool = Query(default=False)) -> dict[str, Any]:
 # Run logs (data/runs/<run_id>.jsonl, written by agent.py)
 # ---------------------------------------------------------------------------
 def _run_files() -> list[Path]:
+    """Policy sweeps only, newest first (as ui/pages/D.py): A's and B's runbooks log here too."""
     runs_dir = Path(agent.RUNS_DIR)
     if not runs_dir.exists():
         return []
-    return sorted((p for p in runs_dir.glob("*.jsonl") if p.name != "llm_calls.jsonl"), reverse=True)
+    return sorted(runs_dir.glob("*-policy_sweep-*.jsonl"), reverse=True)
 
 
 def _events(path: Path) -> list[dict[str, Any]]:
@@ -127,7 +128,7 @@ def _summary(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
 
 @router.get("/runs")
 def runs() -> list[dict[str, Any]]:
-    """Every run log, newest first."""
+    """Every policy-sweep run log, newest first."""
     return [_summary(p, _events(p)) for p in _run_files()]
 
 

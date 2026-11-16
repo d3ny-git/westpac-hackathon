@@ -22,7 +22,7 @@ Want to keep the demo ledger untouched? Start it with `GUARDIAN_DB=/tmp/guardian
 | 3 | D → E: recommend QUIET_HELP_PUSH | **Policy (D)** → 6. Policy sweep | **Run sweep without the AI** (or with it) | Run log COMPLETED; 3. Recommendations shows hero's `QUIET_HELP_PUSH` (R-0004) awaiting approval |
 | 4 | Human → E: approved | **Actions (E)** → Approval Queue | Acting staff `staff_19c` → **Approve** on hero's *Quiet Help Push* | "R-0004: APPROVED — saved in ledger" |
 | 5 | E → Customer: push notification | **Actions (E)** → Approved — Awaiting Execution | **Execute** | Customer Experience tab: lock screen says only "You have a new message from Westpac"; inside the app, the three options |
-| 6 | Customer → B: hardship form | **Home** → Demo controls | **Simulate: hero submits hardship form** (stand-in for Node B's form B5) | Steps 6 and 7 tick |
+| 6 | Customer → B: hardship form | **Home** → Demo controls | **Simulate: hero submits hardship form** (the same as Node B's mock input form on the B page) | Steps 6 and 7 tick |
 | 7 | B → C: score 50 + HARDSHIP_RESPONSE due in 21 days | **Ledger (C)** → Customer lookup | – | Combined **75 HIGH**, open hardship case **due 01 Dec** |
 | 8 | D → E: BOOK_MEETING → approved → call code | **Policy (D)** sweep again, then **Actions (E)** | **Run sweep without the AI** → **Approve** hero's *Book Meeting* (R-0005) → **Execute** | Customer Experience: "Your call with a hardship specialist", 18 Nov 14:00, the 6-character **call code** (only shown here) |
 | 9 | Collections → D: SEND_DEFAULT_NOTICE → BLOCKED (P2) | **Policy (D)** → 1. Check an action | Customer `cust_af4200`, Action `SEND_DEFAULT_NOTICE` → **Check with D** | Red **BLOCK (P2)**: "Hardship request received 6 days ago, response due in 15 days" |

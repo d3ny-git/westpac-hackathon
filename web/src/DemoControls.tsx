@@ -1,4 +1,4 @@
-// The demo controls, in one shared panel: load a story stage, hero's hardship form (stand-in for
+// The demo controls, in one shared panel: load a story stage, hero's hardship form (the same as
 // Node B's form B5), record a checkpoint, simulate an insider edit. Same buttons as the Streamlit
 // sidebars on ui/pages/C.py and D.py.
 import { Alert } from '@westpac/ui/alert';
@@ -73,7 +73,7 @@ export function DemoControlsBody() {
       <Caption>
         {submitted
           ? "Hero's form is in the ledger."
-          : "Stand-in for Node B's form (B5) until it's built: writes hero's interaction score 50 and a 21-day hardship response promise (SPEC steps 6–7)."}
+          : "The same as hero filling in Node B's mock input form (the B page): Node B scores the form 50 and adds a 21-day hardship response promise (SPEC steps 6–7)."}
       </Caption>
 
       <Button

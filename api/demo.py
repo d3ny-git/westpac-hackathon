@@ -1,5 +1,5 @@
-"""Demo controls, in one place for every page: load a story stage, hero's hardship form (stand-in
-for Node B's form B5), simulate an insider edit, plus the story progress and pipeline counts."""
+"""Demo controls, in one place for every page: load a story stage, hero's hardship form (the same as
+Node B's mock input form), simulate an insider edit, plus the story progress and pipeline counts."""
 from __future__ import annotations
 
 import json

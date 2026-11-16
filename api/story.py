@@ -88,7 +88,7 @@ def progress(customer: str = HERO) -> dict[str, Any]:
     qh, bm = by_kind["QUIET_HELP_PUSH"], by_kind["BOOK_MEETING"]
 
     load_hint = _hint("Home", "Demo controls: load the 'start' stage")
-    form_hint = _hint("Home", "Demo controls: 'Hero submits the hardship form' (stand-in for Node B's form)")
+    form_hint = _hint("Home", "Demo controls: 'Hero submits the hardship form' (the same as Node B's mock input form)")
     done: list[tuple[bool, Optional[str], dict[str, str]]] = [
         (bool(account),
          f"ACCOUNT score {account[-1].data['score']} {account[-1].data['band']}" if account else None,

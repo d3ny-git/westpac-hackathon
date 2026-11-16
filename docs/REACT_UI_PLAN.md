@@ -148,7 +148,7 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 
 ### `ui/pages/D.py` → Policy (D)
 - [x] Demo controls: load a story stage
-- [x] Demo controls: hero submits the hardship form (stand-in for B5), disabled once it's in the ledger, with its status line
+- [x] Demo controls: hero submits the hardship form, disabled once it's in the ledger, with its status line (since main #23 D.py points to the B page's form instead; the React UI keeps `load_fixtures.submit_hero_form`, the same path, in Demo controls)
 - [x] 1. Check an action: customer, action (collections, credit offers, VERIFY_CALLER), requested by, call code → ALLOW / BLOCK box with policy, flags and reason, and the entry it was recorded as
 - [x] 1. Check an action: a readable warning when the check can't run (e.g. VERIFY_CALLER with no code)
 - [x] 2. Deadlines (P1): level, customer, promise, due, hours to due, reason; "none" message
@@ -209,9 +209,15 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 - **Tests:** `tests/test_tamper_demo.py` imports `scripts/tamper_demo.py`, which isn't in git on
   `main` (it exists only in a local checkout), so it can't run on this branch; every other existing
   test passes unchanged. `tests/test_api.py` is kept local like the other test files.
+- **Main merged in (Nov 16, #19–#24: A/B nodes, real pipeline, start-empty demo).** The branch follows
+  main's changes: the run-log list shows policy sweeps only (as D.py now does), the e2e also isolates
+  `GUARDIAN_CLEAN_DIR`, and `app.py` relies on agent.py's new `GUARDIAN_RUNS_DIR`. Not ported (outside
+  this plan, which covers C, D and E): the new **A and B pages** (`ui/pages/A.py`, `B.py`, incl. B's
+  mock input form) and a **"reset demo (real pipeline)"** button for `scripts/reset_demo.py`. The React
+  UI works on a ledger built by `reset_demo.py` too; these would be the natural next tickets.
 
 ## Test status (latest run on the branch)
-- `python -m pytest`: 376 passed (322 existing tests + 54 in `tests/test_api.py`)
+- `python -m pytest`: 477 passed (422 existing tests after merging main #19–#24, + 55 in `tests/test_api.py`)
 - `cd web && npm run build` and `npx tsc --noEmit`: pass
 - `npx playwright test`: 3 passed (the 10-step story with no-AI sweeps and the call code read from the
   phone; insider edit caught + sweep stops; ledger filters)

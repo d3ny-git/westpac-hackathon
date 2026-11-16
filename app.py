@@ -33,15 +33,12 @@ def main() -> None:
 
     import uvicorn
 
-    import agent
-    from api.main import WEB_DIST, app
+    from api.main import WEB_DIST, app      # imported after .env is loaded: agent.py reads GUARDIAN_RUNS_DIR
+    from nodes.ledger import store
 
-    if os.getenv("GUARDIAN_RUNS_DIR"):
-        agent.RUNS_DIR = Path(os.environ["GUARDIAN_RUNS_DIR"])
     if not (WEB_DIST / "index.html").is_file():
         print("Note: web/dist isn't built yet, so only the API works. Run: cd web && npm ci && npm run build")
-    from nodes.ledger import store
-    print(f"Customer Guardian on http://{HOST}:{args.port}  (ledger: {store.db_file()})")
+    print(f"Customer Guardian on http://{HOST}:{args.port}  (ledger: {store.db_file()})", flush=True)
     uvicorn.run(app, host=HOST, port=args.port, log_level="warning")
 
 
