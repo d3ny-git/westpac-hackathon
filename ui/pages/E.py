@@ -1,11 +1,22 @@
 
-"""Customer Guardian – Node E Dashboard.
+"""Customer Guardian – Node E Streamlit dashboard.
 
-Compact Streamlit prototype for the Westpac hackathon.
-All actions are simulated until Nodes C, D and E are connected.
+Human decisions persist in Node C's append-only ledger.
+Execution and caller verification remain disabled until Node D is integrated.
 """
 
+from pathlib import Path
+import sys
 import streamlit as st
+
+# Works when launched as: streamlit run ui/pages/E.py
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from nodes.actions import approve, reject, actions_pending, actions_status
+from nodes.ledger import store
+from shared.schemas import Recommendation
 
 st.set_page_config(
     page_title="Customer Guardian",
@@ -155,118 +166,49 @@ div.stButton > button {
 
 
 # ============================================================
-# DEMO DATA
+# LEDGER FUNCTIONS
 # ============================================================
 
-DEMO_RECOMMENDATIONS = [
-    {
-        "rec_id": "R-0001",
-        "customer_token": "cust_af4200",
-        "recommendation": "BOOK_MEETING",
-        "why": ["SCORE_HIGH"],
-        "status": "AWAITING_APPROVAL",
-    },
-    {
-        "rec_id": "R-0002",
-        "customer_token": "cust_bb4b75",
-        "recommendation": "QUIET_HELP_PUSH",
-        "why": ["SALARY_STOPPED"],
-        "status": "AWAITING_APPROVAL",
-    },
-]
+def load_recommendations():
+    """Load recommendations and their current ledger-backed status."""
 
-if "recommendations" not in st.session_state:
-    st.session_state.recommendations = [
-        item.copy() for item in DEMO_RECOMMENDATIONS
-    ]
+    result = []
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    for entry in store.read(entry_type="RECOMMENDATION"):
+        rec = Recommendation.model_validate(entry.data)
 
-if "call_codes" not in st.session_state:
-    st.session_state.call_codes = {}
+        item = rec.model_dump(mode="json")
+        item["status"] = actions_status(rec.rec_id)["status"]
 
-if "audit_events" not in st.session_state:
-    st.session_state.audit_events = []
+        result.append(item)
+
+    return result
 
 
-# ============================================================
-# FUNCTIONS
-# ============================================================
+def decide(rec_id, staff, accept):
+    """Send a human decision to Node E and persist it in Node C."""
 
-def record_event(rec_id, event, staff):
-    st.session_state.audit_events.append({
-        "recommendation": rec_id,
-        "event": event,
-        "staff": staff,
-    })
-
-
-def approve_item(rec_id, staff):
-    for item in st.session_state.recommendations:
-        if item["rec_id"] == rec_id:
-            if item["status"] != "AWAITING_APPROVAL":
-                return False
-
-            item["status"] = "APPROVED"
-            record_event(rec_id, "APPROVED", staff)
-            return True
-
-    return False
-
-
-def reject_item(rec_id, staff):
-    for item in st.session_state.recommendations:
-        if item["rec_id"] == rec_id:
-            if item["status"] != "AWAITING_APPROVAL":
-                return False
-
-            item["status"] = "REJECTED"
-            record_event(rec_id, "REJECTED", staff)
-            return True
-
-    return False
-
-
-def execute_item(rec_id):
-    """Simulate an action after human approval.
-
-    Real execution requires a ledger approval and policy recheck.
-    """
-
-    for item in st.session_state.recommendations:
-        if item["rec_id"] != rec_id:
-            continue
-
-        if item["status"] != "APPROVED":
-            return False
-
-        token = item["customer_token"]
-        action = item["recommendation"]
-
-        if action == "QUIET_HELP_PUSH":
-            st.session_state.messages.append({
-                "customer_token": token,
-                "message": "You have a new message from Westpac",
-                "options": [
-                    "Pause repayments",
-                    "Reduce repayments",
-                    "Book a call",
-                ],
-            })
-
-        elif action == "BOOK_MEETING":
-            # Demo-only code. Not secure for production.
-            st.session_state.call_codes[token] = "K7P4QX"
-
+    try:
+        if accept:
+            result = approve(rec_id, staff)
         else:
-            return False
+            result = reject(rec_id, staff)
 
-        item["status"] = "DONE"
-        record_event(rec_id, "DONE", "DEMO_SYSTEM")
-        return True
+    except Exception as exc:
+        st.error(f"Ledger write failed: {exc}")
+        return
 
-    return False
+    if "error" in result:
+        st.error(result["error"])
+
+    elif "warning" in result:
+        st.warning(result["warning"])
+
+    else:
+        st.success(
+            f"{rec_id}: {result['status']} — saved in ledger"
+        )
+        st.rerun()
 
 
 # ============================================================
@@ -277,12 +219,25 @@ st.markdown("""
 <div class="hero">
     <div class="hero-title">🛡 Customer Guardian</div>
     <div class="hero-subtitle">
-        Node E · Human Approval & Customer Actions · Demo
+        Node E · Human Approval &amp; Customer Actions ·
+        Ledger-connected demo
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-items = st.session_state.recommendations
+
+# ============================================================
+# LOAD REAL DATA
+# ============================================================
+
+try:
+    items = load_recommendations()
+    ledger_entries = store.read()
+
+except Exception as exc:
+    st.error(f"Unable to read Promise Ledger: {exc}")
+    st.stop()
+
 
 pending = [
     item for item in items
@@ -298,6 +253,11 @@ completed = [
     item for item in items
     if item["status"] == "DONE"
 ]
+
+
+# ============================================================
+# METRICS
+# ============================================================
 
 m1, m2, m3, m4 = st.columns(4)
 
@@ -327,6 +287,7 @@ with tab1:
     left, right = st.columns([1.5, 1], gap="medium")
 
     with left:
+
         st.subheader("Approval Queue")
 
         staff = st.selectbox(
@@ -335,7 +296,7 @@ with tab1:
         )
 
         if not pending:
-            st.success("All recommendations reviewed.")
+            st.success("No recommendations awaiting approval.")
 
         for item in pending:
 
@@ -358,29 +319,40 @@ with tab1:
                 col_a, col_b = st.columns(2)
 
                 with col_a:
+
                     if st.button(
                         "✓ Approve",
                         key=f"approve_{item['rec_id']}",
                         use_container_width=True,
                     ):
-                        approve_item(item["rec_id"], staff)
-                        st.rerun()
+
+                        decide(
+                            item["rec_id"],
+                            staff,
+                            True,
+                        )
 
                 with col_b:
+
                     if st.button(
                         "✕ Reject",
                         key=f"reject_{item['rec_id']}",
                         use_container_width=True,
                     ):
-                        reject_item(item["rec_id"], staff)
-                        st.rerun()
+
+                        decide(
+                            item["rec_id"],
+                            staff,
+                            False,
+                        )
 
     with right:
 
-        st.subheader("Ready to Execute")
+        st.subheader("Approved — Awaiting Execution")
 
         st.caption(
-            "Only approved actions can be simulated."
+            "Approved actions require a fresh Node D "
+            "policy check before execution."
         )
 
         if not approved:
@@ -400,18 +372,15 @@ with tab1:
                     f"{item['rec_id']} · {item['customer_token']}"
                 )
 
-                if st.button(
-                    "Simulate Action",
+                st.button(
+                    "Execute (Node D required)",
                     key=f"execute_{item['rec_id']}",
+                    disabled=True,
                     use_container_width=True,
-                ):
-                    if execute_item(item["rec_id"]):
-                        st.rerun()
-                    else:
-                        st.error("Action could not be executed.")
+                )
 
         st.caption(
-            "Demo only. No real customer actions are performed."
+            "No customer action is sent from this dashboard yet."
         )
 
 
@@ -423,118 +392,137 @@ with tab2:
 
     st.subheader("Customer Experience")
 
-    customer = st.selectbox(
-        "Select customer",
-        sorted(set(
-            item["customer_token"]
-            for item in items
-        )),
-    )
+    customers = sorted({
+        item["customer_token"]
+        for item in items
+    })
 
-    phone_col, verify_col = st.columns(2, gap="medium")
+    if not customers:
 
-    with phone_col:
-
-        st.markdown("""
-        <div class="phone">
-            <div style="color:#b7c5d9;font-size:12px">
-                9:41 · Westpac Mobile
-            </div>
-            <div style="font-size:36px;margin:14px 0">
-                📱
-            </div>
-            <div class="phone-title">
-                Customer Notifications
-            </div>
-            <div class="phone-subtitle">
-                Secure message preview
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        customer_messages = [
-            msg for msg in st.session_state.messages
-            if msg["customer_token"] == customer
-        ]
-
-        if customer_messages:
-
-            st.info(
-                "You have a new message from Westpac"
-            )
-
-            with st.expander(
-                "Open message",
-                expanded=True,
-            ):
-
-                st.write("We are here to help.")
-
-                for option in customer_messages[-1]["options"]:
-                    st.button(
-                        option,
-                        key=f"{customer}_{option}",
-                        disabled=True,
-                        use_container_width=True,
-                    )
-
-        else:
-            st.caption(
-                "No new messages for this customer."
-            )
-
-    with verify_col:
-
-        st.subheader("Caller Verification")
-
-        st.caption(
-            "Verify a scheduled Westpac contact."
+        st.info(
+            "No customer recommendations in the ledger yet."
         )
 
-        expected = st.session_state.call_codes.get(
-            customer
+    else:
+
+        customer = st.selectbox(
+            "Select customer",
+            customers,
         )
 
-        if expected:
+        phone_col, verify_col = st.columns(
+            2,
+            gap="medium",
+        )
 
-            with st.container(border=True):
-                st.caption("Customer's in-app call code")
-                st.code(expected)
+        with phone_col:
 
-        else:
-            st.info(
-                "No scheduled contact for this customer."
-            )
+            st.markdown("""
+            <div class="phone">
+                <div style="color:#b7c5d9;font-size:12px">
+                    9:41 · Westpac Mobile
+                </div>
+                <div style="font-size:36px;margin:14px 0">
+                    📱
+                </div>
+                <div class="phone-title">
+                    Customer Notifications
+                </div>
+                <div class="phone-subtitle">
+                    Secure message preview
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        entered_code = st.text_input(
-            "Code provided by caller",
-            max_chars=6,
-            placeholder="Enter 6-character code",
-        ).strip().upper()
+            pushes = [
+                entry
+                for entry in ledger_entries
+                if (
+                    entry.customer_token == customer
+                    and entry.entry_type == "ACTION"
+                    and entry.data.get("action") == "QUIET_HELP_PUSH"
+                )
+            ]
 
-        if st.button(
-            "Verify Caller",
-            use_container_width=True,
-        ):
+            if pushes:
 
-            if not expected:
-                st.error(
-                    "No scheduled contact found."
+                st.info(
+                    "You have a new message from Westpac"
                 )
 
-            elif entered_code == expected:
-                st.success(
-                    "Demo verification: code matches."
+                with st.expander(
+                    "Open message",
+                    expanded=True,
+                ):
+
+                    st.write("We are here to help.")
+
+                    options = pushes[-1].data.get(
+                        "options", []
+                    )
+
+                    for option in options:
+
+                        st.button(
+                            option.replace("_", " ").title(),
+                            key=f"option_{customer}_{option}",
+                            disabled=True,
+                            use_container_width=True,
+                        )
+
+            else:
+
+                st.caption(
+                    "No Quiet Help message has been "
+                    "executed for this customer."
+                )
+
+        with verify_col:
+
+            st.subheader("Caller Verification")
+
+            contacts = [
+                entry
+                for entry in ledger_entries
+                if (
+                    entry.customer_token == customer
+                    and entry.entry_type == "CONTACT_SCHEDULED"
+                )
+            ]
+
+            if contacts:
+
+                st.caption(
+                    "Customer's in-app call code"
+                )
+
+                st.code(
+                    contacts[-1].data["call_code"]
                 )
 
             else:
-                st.error(
-                    "Code does not match."
+
+                st.info(
+                    "No scheduled contact for this customer."
                 )
 
-        st.caption(
-            "Demo only. Real verification uses Node D policy P3."
-        )
+            st.text_input(
+                "Code provided by caller",
+                max_chars=6,
+                placeholder="Enter 6-character code",
+                disabled=True,
+            )
+
+            st.button(
+                "Verify Caller (Node D required)",
+                disabled=True,
+                use_container_width=True,
+            )
+
+            st.caption(
+                "Verification requires Node D policy P3. "
+                "Matching text alone is not verification."
+            )
 
 
 # ============================================================
@@ -555,36 +543,57 @@ with tab3:
         for item in items
     ]
 
-    st.dataframe(
-        status_rows,
-        hide_index=True,
-        use_container_width=True,
-    )
-
-    st.subheader("Demo Activity")
-
-    if st.session_state.audit_events:
+    if status_rows:
 
         st.dataframe(
-            st.session_state.audit_events,
+            status_rows,
             hide_index=True,
             use_container_width=True,
         )
 
     else:
-        st.caption("No activity recorded yet.")
 
-    if st.button("Reset Demo"):
+        st.caption(
+            "No recommendations recorded yet."
+        )
 
-        for key in [
-            "recommendations",
-            "messages",
-            "call_codes",
-            "audit_events",
-        ]:
-            st.session_state.pop(key, None)
+    st.subheader("Promise Ledger Activity")
 
-        st.rerun()
+    event_rows = [
+        {
+            "Entry": entry.entry_id,
+            "Type": entry.entry_type,
+            "Customer": entry.customer_token,
+            "Reference": entry.data.get(
+                "rec_id",
+                entry.data.get(
+                    "ref_id",
+                    entry.data.get("promise_id", ""),
+                ),
+            ),
+            "Created": str(entry.created_at),
+        }
+        for entry in reversed(ledger_entries)
+    ]
+
+    if event_rows:
+
+        st.dataframe(
+            event_rows,
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    else:
+
+        st.caption(
+            "No ledger activity yet."
+        )
+
+    st.caption(
+        "The ledger is append-only. "
+        "Demo reset is intentionally not available here."
+    )
 
 
 # ============================================================
@@ -596,4 +605,3 @@ st.markdown("""
     Customer Guardian · Node E · Westpac Hackathon Prototype
 </div>
 """, unsafe_allow_html=True)
-
