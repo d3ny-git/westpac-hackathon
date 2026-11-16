@@ -6,15 +6,17 @@ Westpac hackathon project. Westpac was fined $26m for missing customer hardship 
 - applies plain-code policies
 - recommends actions that a human must approve
 
-Built in Python with one FastMCP server, an OpenRouter LLM, a Streamlit UI and SQLite, all running locally.
+Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit UI and SQLite, all running locally.
 
 ## Status
 
 | What | State |
 |---|---|
 | Plan, docs, mock data | Done (`docs/`, `mock_input_output/`) |
-| `shared/llm.py` (AI gateway) + `shared/pii_guard.py` (PII check) | Done, with tests (`tests/test_llm.py`) |
-| Rest of Phase 0: schemas, config, ledger store, `agent.py`, `server.py` | Next (Owner-CD) |
+| `shared/`: `llm.py` (AI gateway), `pii_guard.py` (PII check + `@safe_tool`), `config.py`, `schemas.py` | Done ([shared/README.md](shared/README.md)) |
+| C-2 Ledger store: `store.append()`, `read()`, `next_id()` | Done |
+| C-7 MCP server: `server.py` + `scripts/try_tool.py`. **A, B, E can now add their tools** ([nodes/README.md](nodes/README.md)) | Done |
+| Next for Owner-CD: C-3 hash-chain check, C-5/C-6 ledger logic, D policy agent, `agent.py` | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -102,7 +104,7 @@ Set `TOKEN_SECRET=mock-demo-secret` when testing against these files, or the tok
 shared/        schemas.py  config.py  pii_guard.py  llm.py
 sanitize.py    sanitize_transactions() (A) + sanitize_interaction() (B)
 nodes/         account.py  interaction.py  ledger/  policy.py  actions.py
-server.py      one FastMCP server (each node registers its tools)
+server.py      one MCP server (each node registers its tools)
 agent.py       runbook runner
 runbooks/      a_account.md  b_interaction.md  policy_sweep.md  execute.md
 ui/            app.py + pages/ A.py B.py C.py D.py E.py
@@ -122,6 +124,8 @@ pip install -r requirements.txt
 #   OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
 python -m shared.llm             # check your OpenRouter key + model work (works today)
 python -m pytest                 # run the tests (works today)
+python server.py --list          # list every MCP tool, grouped by node (works today)
+python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)
 python scripts/reset_demo.py     # generate -> sanitize -> run A and B workflows (--no-ai)
 streamlit run ui/app.py
 ```
