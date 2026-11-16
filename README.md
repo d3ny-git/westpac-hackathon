@@ -22,7 +22,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | C-8 Seed data: `python scripts/load_fixtures.py` loads a realistic demo ledger (`--stage start` or `full`) | Done |
 | C-9 Ledger page: `streamlit run ui/pages/C.py` (integrity badge + checkpoint, Risk Dashboard, Quiet Help, customer lookup, full ledger, demo controls) | Done |
 | D-2 Caller check (P3): a caller is ALLOWED only if their call code matches a booked call (`CONTACT_SCHEDULED`); otherwise BLOCKED as a possible scam | Done |
-| Next for Owner-CD: D-3..D-8 (deadlines, recommendations, tools, `agent.py`), then the D page (D-9) | In progress |
+| D-3 Deadline watcher (P1): `check_deadlines()` flags open promises due within 24h (ALERT) or overdue (ESCALATE) | Done |
+| Next for Owner-CD: D-4..D-8 (recommendations, tools, `agent.py`), then the D page (D-9) | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
