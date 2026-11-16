@@ -1,16 +1,25 @@
 """PII guard: detects personal information so it never reaches the AI or leaves the machine.
 
 Used by shared/llm.py (every request and reply), by @safe_tool (every MCP tool's output),
-and by any code that needs to check data is clean. It reports the KIND of PII found,
-never the value itself.
+by sanitize.py (raw data -> clean data), and by any code that needs to check data is clean.
+It reports the KIND of PII found, never the value itself.
+
+    find_pii / assert_no_pii   detect PII
+    tokenise                   real ID -> token (cust_xxxxxx, staff_xxx), one-way
+    keep_columns               keep only allow-listed columns (everything else is dropped)
+    scrub_text                 free text -> keyword flags only (the text itself is thrown away)
+    @safe_tool                 wrap every MCP tool
 """
 from __future__ import annotations
 
 import functools
+import hashlib
+import hmac
 import inspect
 import json
+import os
 import re
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Mapping
 
 from pydantic import ValidationError
 from pydantic_core import to_jsonable_python
@@ -57,6 +66,82 @@ def assert_no_pii(obj: Any) -> None:
     kinds = find_pii(obj)
     if kinds:
         raise PIIError(f"PII detected ({', '.join(kinds)}). Nothing was sent.")
+
+
+# ---------------------------------------------------------------------------
+# Sanitizing helpers (used by sanitize.py)
+# ---------------------------------------------------------------------------
+# TODO (before going beyond the demo): remove this default and require TOKEN_SECRET.
+# It's here so the demo works without .env. It's the secret mock_input_output/ was made with,
+# so demo tokens match the mock data (e.g. hero's customer_id 100200301 -> cust_af4200).
+DEMO_TOKEN_SECRET = "mock-demo-secret"
+
+# How many hex characters each kind of token keeps (shared/config.py patterns: cust_ 6, staff_ 3).
+TOKEN_LENGTHS = {"cust_": 6, "staff_": 3}
+
+
+def tokenise(raw_id: str, prefix: str = "cust_") -> str:
+    """Turn a real ID into a token: prefix + the first hex characters of hmac_sha256(TOKEN_SECRET, id).
+
+        tokenise("100200301")              -> "cust_af4200"   (with the mock secret)
+        tokenise("W10442", prefix="staff_") -> "staff_b38"
+
+    The same ID always gives the same token (so a customer's rows stay linked), and without
+    TOKEN_SECRET nobody can work out which real ID a token belongs to.
+    """
+    if prefix not in TOKEN_LENGTHS:
+        raise ValueError(f"unknown token prefix {prefix!r}; use one of {sorted(TOKEN_LENGTHS)}")
+    if not str(raw_id).strip():
+        raise ValueError("can't tokenise an empty ID")
+    secret = os.getenv("TOKEN_SECRET") or DEMO_TOKEN_SECRET
+    digest = hmac.new(secret.encode(), str(raw_id).strip().encode(), hashlib.sha256).hexdigest()
+    return prefix + digest[:TOKEN_LENGTHS[prefix]]
+
+
+def keep_columns(rows: Iterable[Mapping[str, Any]], allow_list: list[str]) -> list[dict[str, Any]]:
+    """Keep ONLY the allow-listed columns, in allow-list order. Anything else (a new or unexpected
+    column, e.g. someone adds 'full_name') is dropped by default.
+
+    Raises ValueError if a row is missing an allow-listed column, so a broken file is noticed.
+    """
+    kept = []
+    for n, row in enumerate(rows, 1):
+        missing = [c for c in allow_list if c not in row]
+        if missing:
+            raise ValueError(f"row {n} is missing column(s): {', '.join(missing)}")
+        kept.append({c: row[c] for c in allow_list})
+    return kept
+
+
+# Keyword flags B looks for (mock_input_output/README.md). Matched on lower-case text.
+KEYWORD_FLAGS: dict[str, list[str]] = {
+    "JOB_LOSS": [r"lost my job", r"made redundant", r"laid off"],
+    "CANT_AFFORD": [r"can[’']?t afford", r"cannot afford", r"struggling to pay"],
+}
+
+
+def _redact(text: str, names: Iterable[str] = ()) -> str:
+    """Blank out anything that looks like PII (patterns above + the given names)."""
+    for pattern in PATTERNS.values():
+        text = pattern.sub(" ", text)
+    text = _CARD_CANDIDATE.sub(" ", text)
+    for name in names:
+        for part in [name, *str(name).split()]:          # "Jane Citizen", "Jane", "Citizen"
+            if len(part) > 1:
+                text = re.sub(rf"\b{re.escape(part)}\b", " ", text, flags=re.IGNORECASE)
+    return text
+
+
+def scrub_text(text: str, names: Iterable[str] = ()) -> list[str]:
+    """Free text -> keyword flags ONLY, e.g. ["CANT_AFFORD", "JOB_LOSS"] (sorted).
+
+    PII (emails, phones, BSBs, card numbers, dates of birth, and the `names` given, such as the
+    customer's and staff member's names) is blanked out first, then the flags are found.
+    The text itself is never returned: callers must throw it away.
+    """
+    scrubbed = _redact(text or "", names).lower()
+    return sorted(flag for flag, phrases in KEYWORD_FLAGS.items()
+                  if any(re.search(p, scrubbed) for p in phrases))
 
 
 # ---------------------------------------------------------------------------
