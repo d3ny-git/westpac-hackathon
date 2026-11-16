@@ -2,8 +2,8 @@
 
 | Node | File | Owner |
 |---|---|---|
-| A Account | `nodes/account.py` | Owner-A |
-| B Interactions | `nodes/interaction.py` | Owner-B |
+| A Account | `nodes/account.py` (done: rules + 4 tools) | Owner-A |
+| B Interactions | `nodes/interaction.py` (done: rules, promises + 4 tools) | Owner-B |
 | C Ledger | `nodes/ledger/` (done: `store.py`, `chain.py`, `quiet_help.py`, `dashboard.py`, `tools.py`) | Owner-CD |
 | D Policy | `nodes/policy.py` (done: P1–P4, recommendations, explain, 4 tools) | Owner-CD |
 | E Actions | `nodes/actions.py` | Owner-E |

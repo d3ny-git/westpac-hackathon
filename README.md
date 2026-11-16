@@ -33,7 +33,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | E-1/E-3 (Node E): approve/reject + ledger-connected dashboard `streamlit run ui/pages/E.py` | Done |
 | FLOW-1/2/3: E carries out approved actions (push, meeting + call code), stand-in for B's hardship form, E's MCP tools, `execute.md`, caller check on the E page. **The SPEC's full story runs C → D → E** | Done |
 | AB-1 Sanitizing: `python sanitize.py` turns raw data (fake PII) into clean data (tokens only); `tokenise`, `keep_columns`, `scrub_text` in `shared/pii_guard.py` | Done |
-| Next: AB-2 (Node A) and AB-3 (Node B), then their runbooks, reset and pages (AB-4, AB-5). FLOW-4 (GEL React UI) is on branch `ui/gel-react` | In progress |
+| AB-2 Node A (`nodes/account.py`) and AB-3 Node B (`nodes/interaction.py`): scoring from clean data, B's promises, 4 MCP tools each. **The server now has all 5 nodes (21 tools)** | Done |
+| Next: AB-4 (A/B runbooks + `reset_demo.py`), AB-5 (A/B pages + B's mock input form). FLOW-4 (GEL React UI) is on branch `ui/gel-react` | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
