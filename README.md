@@ -18,7 +18,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | C-7 MCP server: `server.py` + `scripts/try_tool.py`. **A, B, E can now add their tools** ([nodes/README.md](nodes/README.md)) | Done |
 | C-3 Tamper check: `verify_chain()` + `ledger_verify_chain` tool | Done |
 | C-5/C-6 Ledger logic: combined score, open hardship case, Quiet Help list, Risk Dashboard. **All 5 ledger tools done** | Done |
-| Next for Owner-CD: D policy agent, `agent.py`, C-8 seed data, UI pages | In progress |
+| D-1 Policy gatekeeper: `check_action()` with P2 (no collections during hardship) and P4 (no credit offers to HIGH+). P3 caller check is a fail-closed placeholder until D-2 | Done |
+| Next for Owner-CD: D-2..D-9 (caller check, deadlines, recommendations, `agent.py`), C-8 seed data, UI pages | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
