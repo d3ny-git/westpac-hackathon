@@ -1,4 +1,5 @@
-"""Node D: the Policy Agent (D-1 gatekeeper, D-2 caller check, D-3 deadline watcher, D-4 recommendations).
+"""Node D: the Policy Agent (D-1 gatekeeper, D-2 caller check, D-3 deadline watcher, D-4 recommendations,
+D-5 explain).
 
 D has two jobs:
   1. Gatekeeper, check_action(): before the bank does something to a customer (sends a default
@@ -9,6 +10,8 @@ D has two jobs:
      about to be missed (ALERT) or already were (ESCALATE).
   3. Recommender, recommend(): turns what the ledger shows into suggestions (Quiet Help push,
      book a meeting, escalate). Nothing happens until a PERSON approves one in Node E.
+  4. Explainer, explain(entry_id): gathers the facts behind a recorded decision or recommendation,
+     so a person (or the AI, via shared.llm.explain) can say WHY in plain English.
 
 The rules are plain Python, not AI: the same ledger and the same request always give the same answer.
 
@@ -35,15 +38,18 @@ import hmac
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+from pydantic import BaseModel
 
 from nodes.ledger import store
-from nodes.ledger.quiet_help import (CombinedScore, combined_score, open_hardship_case, open_promises,
+from nodes.ledger.quiet_help import (CombinedScore, combine, combined_score, open_hardship_case, open_promises,
                                      quiet_help_candidates, tracked_recommendations)
-from shared.config import (COLLECTIONS_ACTIONS, CREDIT_OFFER_ACTIONS, HARDSHIP_RESPONSE_DAYS, HIGH_OR_ABOVE,
+from shared.config import (QUIET_HELP_COOLDOWN, COLLECTIONS_ACTIONS, CREDIT_OFFER_ACTIONS, HARDSHIP_RESPONSE_DAYS, HIGH_OR_ABOVE,
                            P1_ALERT_WINDOW, RECOMMENDATION_COOLDOWN, ActionType, DeadlineLevel, DecisionResult,
-                           EntryType, PolicyId, PromiseType, RecommendationType, now)
-from shared.schemas import ActionRequest, ContactScheduled, DeadlineAlert, Decision, Promise, Recommendation
+                           EntryType, PolicyId, PromiseType, RecommendationType, band, now)
+from shared.schemas import (ActionRequest, ContactScheduled, DeadlineAlert, Decision, LedgerEntry, Promise,
+                            Recommendation)
 
 DbPath = Optional[Path | str]
 
@@ -304,3 +310,159 @@ def recommend(*, db_path: DbPath = None) -> list[Recommendation]:
         store.append(EntryType.RECOMMENDATION, token, rec.model_dump(mode="json"), db_path=db_path)
         created.append(rec)
     return created
+
+
+# ---------------------------------------------------------------------------
+# Explain (D-5)
+# ---------------------------------------------------------------------------
+class PolicyError(ValueError):
+    """D was asked something it can't answer (e.g. to explain an entry that isn't a decision)."""
+
+
+# The rules in fixed words. The AI may rephrase these; it never decides what they say.
+POLICY_RULES = {
+    "P1": "A promise that is overdue is escalated; one due within 24 hours raises an alert.",
+    "P2": "No collections or default notice may be sent while the customer has an open hardship case.",
+    "P3": "A caller claiming to be from Westpac is only genuine if they quote the call code of a call "
+          "Westpac booked for this customer; otherwise treat it as a possible scam.",
+    "P4": "No credit card, loan or limit-increase offers to customers whose hardship score is HIGH or CRITICAL.",
+}
+RECOMMENDATION_RULES = {
+    "ESCALATE": "A promise to the customer is overdue, so a team lead should step in.",
+    "BOOK_MEETING": "The customer has an open hardship case but no meeting booked, so book a call with a specialist.",
+    "QUIET_HELP_PUSH": "The customer's hardship score is HIGH or CRITICAL, they have no open hardship case and no "
+                       "Quiet Help message in the last 30 days, so offer help privately in the app.",
+}
+_HIDDEN = "(hidden)"
+
+
+class Explanation(BaseModel):
+    """The facts behind one decision or recommendation, as they were WHEN it was made."""
+    entry_id: str
+    entry_type: str                    # BLOCKED, ACTION or RECOMMENDATION
+    customer_token: str
+    recorded_at: str
+    outcome: dict[str, Any]            # the decision / recommendation itself
+    rule: str                          # the policy or recommendation rule, in fixed words
+    facts: dict[str, Any]              # combined score, open case, overdue promises... at that moment
+    evidence: list[dict[str, Any]]     # the ledger entries the decision relied on (call codes hidden)
+
+
+def _hide_codes(data: dict[str, Any]) -> dict[str, Any]:
+    """Call codes are secrets: they must never reach the AI or a screen through an explanation."""
+    return {k: (_HIDDEN if k == "call_code" else v) for k, v in data.items()}
+
+
+def _as_evidence(e: LedgerEntry) -> dict[str, Any]:
+    return {"entry_id": e.entry_id, "entry_type": e.entry_type,
+            "recorded_at": e.created_at.isoformat(), "data": _hide_codes(e.data)}
+
+
+def _facts_before(prior: list[LedgerEntry], at: datetime) -> tuple[dict[str, Any], dict[str, list[LedgerEntry]]]:
+    """Work out the customer's situation from the entries that existed at the time.
+
+    Returns (facts, groups) where groups holds the entries behind each fact, so the right ones
+    can be shown as evidence."""
+    scores: dict[str, LedgerEntry] = {}
+    promises: dict[str, LedgerEntry] = {}
+    status: dict[str, str] = {}
+    contacts: list[LedgerEntry] = []
+    pushes: list[LedgerEntry] = []
+    for e in prior:
+        d = e.data
+        if e.entry_type == "SCORE":
+            scores[d["source"]] = e                                    # latest per source wins
+        elif e.entry_type == "PROMISE":
+            promises[d["promise_id"]], status[d["promise_id"]] = e, d["status"]
+        elif e.entry_type == "STATUS_UPDATE" and d["ref_id"] in promises:
+            status[d["ref_id"]] = d["status"]
+        elif e.entry_type == "CONTACT_SCHEDULED":
+            contacts.append(e)
+        elif e.entry_type == "ACTION" and d.get("action") == "QUIET_HELP_PUSH" and "message_id" in d:
+            pushes.append(e)
+
+    a = scores["ACCOUNT"].data["score"] if "ACCOUNT" in scores else None
+    b = scores["INTERACTION"].data["score"] if "INTERACTION" in scores else None
+    open_p = [e for pid, e in promises.items() if status[pid] == "OPEN"]
+    cases = [e for e in open_p if e.data["promise_type"] == "HARDSHIP_RESPONSE"]
+    meetings = [e for e in open_p if e.data["promise_type"] == "MEETING"]
+    overdue = [e for e in open_p if datetime.fromisoformat(e.data["due"]) < at]
+    combined = combine(a, b) if scores else None
+
+    facts = {
+        "combined_score": combined,
+        "band": band(combined).value if combined is not None else None,
+        "account_score": a,
+        "interaction_score": b,
+        "open_hardship_case": ({"promise_id": cases[-1].data["promise_id"], "due": cases[-1].data["due"]}
+                               if cases else None),
+        "meeting_booked": bool(meetings),
+        "overdue_promises": [{"promise_id": e.data["promise_id"], "promise_type": e.data["promise_type"],
+                              "due": e.data["due"]} for e in overdue],
+        "calls_booked": len(contacts),                                 # how many, never the codes
+        "last_quiet_help_push": pushes[-1].created_at.isoformat() if pushes else None,
+        "quiet_help_push_in_last_30_days": bool(pushes and pushes[-1].created_at > at - QUIET_HELP_COOLDOWN),
+    }
+    groups = {"scores": list(scores.values()), "cases": cases, "meetings": meetings,
+              "overdue": overdue, "contacts": contacts, "pushes": pushes[-1:]}
+    return facts, groups
+
+
+def explain(entry_id: str, *, db_path: DbPath = None) -> Explanation:
+    """The facts behind a recorded decision (BLOCKED / ACTION from check_action) or a RECOMMENDATION.
+
+    Only entries that existed when it was made are used, so an old decision is explained by what
+    was known then. Call codes are always hidden. Pass the result to shared.llm.explain() to get
+    a plain-English sentence; the AI only rephrases these facts.
+    """
+    entry = store.get(entry_id, db_path=db_path)
+    if entry is None:
+        raise PolicyError(f"{entry_id} isn't in the ledger")
+    is_decision = entry.entry_type in ("BLOCKED", "ACTION") and "decision" in entry.data
+    if not (is_decision or entry.entry_type == "RECOMMENDATION"):
+        raise PolicyError(f"{entry_id} is a {entry.entry_type} entry; only D's decisions and "
+                          f"recommendations can be explained")
+
+    history = store.read(customer_token=entry.customer_token, db_path=db_path)
+    prior = [e for e in history if int(e.entry_id[2:]) < int(entry_id[2:])]    # strictly before it
+    facts, groups = _facts_before(prior, entry.created_at)
+    d = entry.data
+
+    if is_decision:
+        action, policy = d["action"], d.get("policy")
+        if policy:
+            rule = POLICY_RULES[policy]
+        elif action == ActionType.VERIFY_CALLER.value:
+            rule = POLICY_RULES["P3"]                                  # an ALLOWED caller passed P3
+        else:
+            rule = "No policy blocks this action."
+        if action in _COLLECTIONS:
+            evidence = groups["cases"]
+        elif action in _CREDIT_OFFERS:
+            evidence = groups["scores"]
+        elif action == ActionType.VERIFY_CALLER.value:
+            evidence = groups["contacts"]
+        else:
+            evidence = groups["scores"] + groups["cases"]
+    else:
+        kind = d["recommendation"]
+        rule = RECOMMENDATION_RULES[kind]
+        evidence = {"ESCALATE": groups["overdue"],
+                    "BOOK_MEETING": groups["cases"] + groups["meetings"],
+                    "QUIET_HELP_PUSH": groups["scores"] + groups["cases"] + groups["pushes"]}[kind]
+
+    return Explanation(entry_id=entry.entry_id, entry_type=entry.entry_type,
+                       customer_token=entry.customer_token, recorded_at=entry.created_at.isoformat(),
+                       outcome=_hide_codes(d), rule=rule, facts=facts,
+                       evidence=[_as_evidence(e) for e in sorted(evidence, key=lambda e: e.entry_id)])
+
+
+def explain_in_words(entry_id: str, *, db_path: DbPath = None) -> str:
+    """explain() + the AI: a short plain-English explanation for a bank staff member.
+
+    The AI only rephrases the facts from explain(); it can't change the decision. Needs the
+    OpenRouter key in .env. Used by the D page's "Explain" button.
+    """
+    from shared.llm import explain as llm_explain       # imported here so the policies never need the AI
+    facts = explain(entry_id, db_path=db_path).model_dump()
+    return llm_explain(facts, "Explain to a bank staff member why this decision or recommendation was made.")

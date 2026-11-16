@@ -90,7 +90,7 @@ def _explain_failure(exc: Exception) -> Exception | None:
         problems = "; ".join(f"{'.'.join(str(p) for p in e['loc']) or 'input'}: {e['msg']}"
                              for e in exc.errors(include_input=False, include_url=False))
         return _tool_error(f"Invalid data: {problems}")
-    if type(exc).__name__ in {"LedgerError", "ToolError"}:   # expected refusals from our own code
+    if type(exc).__name__ in {"LedgerError", "PolicyError", "ToolError"}:   # expected refusals from our own code
         return _tool_error(str(exc))
     return None
 
