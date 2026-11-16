@@ -20,7 +20,6 @@ import { Tabs, TabsPanel } from '@westpac/ui/tabs';
 import { FormEvent, ReactNode, useState } from 'react';
 
 import {
-  CheckResult,
   CustomerLookup,
   DashboardRow,
   DeadlineAlert,
@@ -57,7 +56,13 @@ import {
 } from '../components';
 import { DecisionAlert } from '../pages/Policy';
 import { useRemembered } from '../live/shared';
-import { ActionDone, Intake, LiveStatus } from '../live/types';
+import {
+  ActionDone,
+  Intake,
+  LiveStatus,
+  ScamAlert,
+  WestpacCheck,
+} from '../live/types';
 
 export function WestpacApp() {
   const [staff, setStaff] = useRemembered('guardian.staff');
@@ -221,10 +226,22 @@ function Overview() {
   const deadlines = useApi<DeadlineAlert[]>('/api/policy/deadlines');
   const risk = useApi<DashboardRow[]>('/api/ledger/dashboard');
   const quiet = useApi<QuietHelpCandidate[]>('/api/ledger/quiet-help');
+  const scams = useApi<ScamAlert[]>('/api/westpac/scam-alerts');
   const r = integrity.data?.report;
   const cycle = status.data?.last_cycle;
   return (
     <>
+      {scams.data && scams.data.length > 0 && (
+        <div className="mb-3 flex flex-col gap-2" data-testid="scam-alerts">
+          {scams.data.slice(0, 3).map(a => (
+            <Alert key={a.entry_id} look="danger" heading={`Possible scam call · ${a.customer_token}`}>
+              Someone said they were calling from Westpac but couldn't give this customer's call code, so they were
+              told to hang up ({stamp(a.created_at)}, policy P3, {a.entry_id}). Check the customer is safe.
+            </Alert>
+          ))}
+          {scams.data.length > 3 && <Caption>{scams.data.length - 3} earlier scam-call alerts in the Audit tab.</Caption>}
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-2">
         <div data-testid="integrity">
           {r &&
@@ -234,7 +251,8 @@ function Overview() {
               </Alert>
             ) : (
               <Alert look="danger" heading="LEDGER TAMPERED">
-                {r.problem} at <strong>{r.first_bad_entry}</strong>. The sweeps stop until this is investigated.
+                {r.problem} at <strong>{r.first_bad_entry}</strong>. Sweeps and every action (checks, approvals, carrying
+                out) are paused until this is investigated.
               </Alert>
             ))}
         </div>
@@ -256,7 +274,9 @@ function Overview() {
                 Triggered by {cycle.trigger === 'change' ? 'a change (submission or approval)' : cycle.trigger}
                 {cycle.finished ? ` · finished ${cycle.finished.slice(11, 19)}` : ''} · scoring {cycle.scoring?.status} ·{' '}
                 {cycle.sweep?.ai_used ? 'with the AI' : `without the AI${cycle.sweep?.ai_note ? ` (${cycle.sweep.ai_note})` : ''}`} ·{' '}
-                {cycle.executed?.length ?? 0} approved action{cycle.executed?.length === 1 ? '' : 's'} carried out
+                {cycle.paused
+                  ? 'actions paused: the ledger did not verify'
+                  : `${cycle.executed?.length ?? 0} approved action${cycle.executed?.length === 1 ? '' : 's'} carried out`}
               </span>
             </Alert>
           )}
@@ -542,9 +562,10 @@ function CheckAction({ staff }: { staff: string }) {
   const [customer, setCustomer] = useState<string | null>(null);
   const [action, setAction] = useState<string | null>(null);
   const [code, setCode] = useState('');
-  const [result, setResult] = useState<CheckResult | null>(null);
+  const [result, setResult] = useState<WestpacCheck | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const check = useAction((body: object) => post<CheckResult>('/api/policy/check', body));
+  // Fails closed: if the ledger doesn't verify, every action is blocked and nothing is recorded.
+  const check = useAction((body: object) => post<WestpacCheck>('/api/westpac/check', body));
   const token = customer && tokens.includes(customer) ? customer : tokens[0] ?? '';
   const chosen = action ?? actions[0] ?? '';
   return (
@@ -604,12 +625,17 @@ function CheckAction({ staff }: { staff: string }) {
       </form>
       <div className="mt-2" aria-live="polite">
         {problem && <Alert look="warning">Can't check that: {problem}</Alert>}
-        {result && (
-          <>
-            <DecisionAlert decision={result.decision} />
-            <Caption>Recorded in the ledger as {result.entry_id}.</Caption>
-          </>
-        )}
+        {result &&
+          (result.paused ? (
+            <Alert look="danger" heading={`BLOCKED · ${result.decision.action} for ${result.decision.customer_token}`} data-testid="decision">
+              {result.decision.reason} Nothing is recorded: the rules would be reading a ledger that may have been changed.
+            </Alert>
+          ) : (
+            <>
+              <DecisionAlert decision={result.decision} />
+              <Caption>Recorded in the ledger as {result.entry_id}.</Caption>
+            </>
+          ))}
       </div>
     </>
   );

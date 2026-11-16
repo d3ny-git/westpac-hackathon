@@ -109,6 +109,10 @@ test('Jane and the hardship team, live: Quiet Help, the form, a booked call, P2 
   await caller.getByRole('button', { name: 'Check' }).click();
   await expect(jane.getByTestId('call-verdict')).toContainText('This matches your call code');
   await expect(jane.locator('body')).not.toContainText('P3');
+  // ...and the hardship team sees that someone tried (B4), without the code.
+  await tab(westpac, 'Overview');
+  await expect(westpac.getByTestId('scam-alerts')).toContainText(`Possible scam call · ${HERO}`);
+  await expect(westpac.getByTestId('scam-alerts')).not.toContainText(code);
 
   // Plus: no personal information on any Westpac view, and the call code isn't there either.
   for (const name of ['Overview', 'New contacts', 'Approvals', 'Check an action', 'Customers', 'Audit']) {

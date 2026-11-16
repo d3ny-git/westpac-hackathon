@@ -36,6 +36,7 @@ from fastapi import APIRouter
 from api.common import REPO, RUN_LOCK, hide_call_codes, mcp_server, present_run  # first: puts scripts/ on sys.path
 import agent  # noqa: E402
 import reset_demo  # noqa: E402
+from api.integrity import ledger_problem  # noqa: E402
 from nodes.actions import actions_execute_approved
 from nodes.ledger.chain import verify_chain
 from nodes.ledger import store
@@ -222,10 +223,17 @@ class LiveWorker:
         record: dict[str, Any] = {"n": self.cycles + 1, "trigger": trigger, "demo_time": now().isoformat(),
                                   "started": datetime.now().isoformat(timespec="seconds")}
         with RUN_LOCK:
+            # Fail closed: on a ledger that doesn't verify, nothing is scored or carried out. The sweep
+            # still runs: its first step verifies the ledger and stops with "LEDGER TAMPERED".
+            problem = ledger_problem()
+            if problem:
+                record["paused"] = problem
             # a. Scoring (A + B), deterministic, without the AI.
             self.busy = "scoring (A + B)"
             clean_ready = all((clean_dir() / f).exists() for f in (CLEAN_TRANSACTIONS_FILE, CLEAN_INTERACTIONS_FILE))
-            if not clean_ready:
+            if problem:
+                record["scoring"] = {"status": "PAUSED", "note": f"ledger integrity check failed: {problem}"}
+            elif not clean_ready:
                 record["scoring"] = {"status": "SKIPPED", "note": "no clean data yet (reset the demo first)"}
             else:
                 try:
@@ -243,7 +251,7 @@ class LiveWorker:
             # c. Carry out what a person approved (E). Node D re-checks each one.
             self.busy = "carrying out approved actions (E)"
             try:
-                record["executed"] = hide_call_codes(actions_execute_approved())
+                record["executed"] = [] if problem else hide_call_codes(actions_execute_approved())
             except Exception as exc:
                 record["executed"], record["execute_error"] = [], f"{type(exc).__name__}: {exc}"
         self.busy = None

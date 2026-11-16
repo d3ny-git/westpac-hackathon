@@ -1,5 +1,6 @@
 // Types for the live apps (the customer app and the Westpac dashboard), matching api/customer.py,
 // api/westpac.py and api/live.py. The walkthrough's types stay in ../api.ts.
+import type { CheckResult } from '../api';
 import type { RunResult } from '../api';
 
 // ---------------------------------------------------------------------------
@@ -59,7 +60,12 @@ export type LiveCycle = {
   sweep?: RunResult & { ai_used: boolean; ai_note: string | null };
   executed?: Record<string, unknown>[];
   execute_error?: string;
+  paused?: string; // the ledger didn't verify: nothing was scored or carried out
 };
+/** "Check an action" on the dashboard: fails closed (paused) when the ledger doesn't verify. */
+export type WestpacCheck = Omit<CheckResult, 'entry_id'> & { entry_id: string | null; paused: boolean };
+/** A caller who couldn't give the customer's call code (P3). */
+export type ScamAlert = { entry_id: string; created_at: string; customer_token: string; reason: string | null };
 export type LiveStatus = {
   enabled: boolean;
   interval_seconds: number;

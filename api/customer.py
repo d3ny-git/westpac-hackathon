@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 import sanitize
 from api.common import RUN_LOCK
+from api.integrity import ledger_problem
 from api.interaction import fake_customers
 from api.live import worker
 from nodes.actions import actions_inbox
@@ -268,6 +269,9 @@ def verify_call(body: CallCheck) -> dict[str, Any]:
     booked (policy P3). Recorded in the ledger. The answer never repeats the real code."""
     if not body.code.strip():
         raise HTTPException(422, "code: type the code the caller says")
+    if ledger_problem():                                 # fail closed: can't vouch for any caller right now
+        return {"genuine": False, "message": "We can't confirm this call right now. Hang up, and call Westpac "
+                                             "on the number on the back of your card."}
     decision = check_action({"customer_token": _token(body.customer_id), "action": "VERIFY_CALLER",
                              "requested_by": SYSTEM_ACTOR, "call_code": body.code.strip()})
     if decision.decision == "ALLOW":
