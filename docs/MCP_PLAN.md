@@ -5,7 +5,14 @@ Hackathon project (see `docs/SPEC.pdf`, `docs/basics.txt`, `docs/customer_guardi
 
 A (Account score) + B (Interaction score + promises) → C (hash-chained ledger, Quiet Help, Risk Dashboard) → D (Policy Agent) → E (Actions, human-approved) → back to C.
 
-The repo is empty. The team is 4 people who know Python but are new to MCP, so A, B, D and E are kept deliberately simple (4 tools each). The ledger (C) is the core of the system, so it gets the full treatment: SQLite, append-only triggers and 5 tools.
+The team is 4 people who know Python but are new to MCP, so A, B, D and E are kept deliberately simple (4 tools each). The ledger (C) is the core of the system, so it gets the full treatment: SQLite, append-only triggers and 5 tools.
+
+**A and B follow the same simple pattern:**
+```
+A:  mock CSV (with PII)         ─►  sanitize  ─►  agentic workflow (runbooks/a_account.md)      ─►  ledger
+B:  mock input form (with PII)  ─►  sanitize  ─►  agentic workflow (runbooks/b_interaction.md)  ─►  ledger
+```
+In the agentic workflow, **the AI chooses the next tool by following the runbook, and the tools do the work.** The AI never calculates a score or reads customer text.
 
 **Stack:**
 - One FastMCP server
@@ -20,21 +27,23 @@ The repo is empty. The team is 4 people who know Python but are new to MCP, so A
 ## 1. Rules and how the code enforces them
 
 ### No PII: a sanitizing step comes before everything
-A and B receive **realistic bank CSVs that contain PII**: names, emails, phones, date of birth, address, BSB/account numbers, staff names, and free-text transcripts. Plain code (no AI) sanitizes them before anything else can see them:
+A and B receive **realistic bank data that contains PII**: names, emails, phones, date of birth, address, BSB/account numbers, staff names, and free text. A gets a mock transactions CSV; B gets a mock input form plus a mock history CSV. Plain code (no AI) sanitizes it before anything else can see it:
 
 ```
-data/raw/*.csv        (has PII)
-   │
-   ▼
-sanitize.py           (plain code, no AI)
-   │  1. tokenise IDs
-   │  2. drop PII columns
-   │  3. scrub + discard free text
-   ▼
-data/clean/*.csv      (no PII)
-   │
-   ▼
-nodes A/B  ──►  ledger  ──►  MCP tools  ──►  AI
+A: data/raw/transactions_raw.csv     B: mock input form + data/raw/interactions_raw.csv
+            (has PII)                              (has PII)
+                 │                                     │
+                 ▼                                     ▼
+            sanitize.py   (plain code, no AI)
+               1. tokenise IDs
+               2. drop PII columns
+               3. extract keyword flags, then delete free text
+                 │
+                 ▼
+            data/clean/*.csv      (no PII)
+                 │
+                 ▼
+            agent.py + runbook  ──►  MCP tools (code does the work)  ──►  ledger
 ```
 
 `shared/pii_guard.py` (owned by B, used by all nodes):
@@ -48,8 +57,8 @@ nodes A/B  ──►  ledger  ──►  MCP tools  ──►  AI
 
 **Security boundaries:**
 1. The MCP server and every node only read from `data/clean/` and the ledger DB. **No code path from an MCP tool touches `data/raw/`**; a test greps for this.
-2. Sanitizing is a **script, not an MCP tool**, so the AI never triggers a read of raw data.
-3. Defence in depth: `@safe_tool` runs on every tool in A–E, and `agent.py` re-checks each result before sending it to OpenRouter.
+2. Sanitizing is **plain code, not an MCP tool**, so the AI never triggers a read of raw data. For A it runs as a script; for B it runs when the form is submitted.
+3. Defence in depth: `@safe_tool` runs on every tool in A–E, and `shared/llm.py` (the only file that talks to OpenRouter) runs `assert_no_pii()` on everything before sending it.
 
 ### Deterministic
 - Rules are plain Python. Weights and cut-offs live in `shared/config.py`.
@@ -67,15 +76,17 @@ Ledger entries are hash-chained. SQLite triggers block UPDATE and DELETE, and `l
 ## 2. Repo structure
 
 ```
-customer-guardian/
+westpac-hackathon/
   README.md
   requirements.txt  # mcp, openai, streamlit, pandas, pydantic, python-dotenv, pyyaml, pytest
-  .env.example      # OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
+  .env              # NOT in GitHub. Owner-CD shares the values: OPENROUTER_API_KEY,
+                    # OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
   shared/
     schemas.py      # Pydantic models for every JSON message in SPEC (CD, frozen after Phase 0)
     config.py       # AS_OF, rule weights, band cut-offs, column allow-lists
     pii_guard.py    # tokenise, keep_columns, scrub_text, assert_no_pii, @safe_tool (B)
-  sanitize.py       # raw → clean for both CSVs (A writes transaction part, B writes interaction part)
+    llm.py          # the ONLY file that calls OpenRouter: PII check, temperature 0, logging (CD)
+  sanitize.py       # sanitize_transactions() (A) + sanitize_interaction() (B)
   nodes/
     account.py      # A: rules + 4 tools
     interaction.py  # B: rules + 4 tools
@@ -88,11 +99,11 @@ customer-guardian/
     policy.py       # D: P1–P4 + recommendations + 4 tools
     actions.py      # E: approve/reject (UI only) + execute + 4 tools
   server.py         # FastMCP: each node's register(mcp)
-  agent.py          # runs a runbook through OpenRouter (CD)
-  runbooks/         # 3 markdown files
+  agent.py          # runs a runbook: AI picks the next tool, tools do the work (CD)
+  runbooks/         # a_account.md (A), b_interaction.md (B), policy_sweep.md, execute.md (CD)
   ui/app.py + ui/pages/  A.py B.py C.py D.py E.py
   data/
-    raw/            # synthetic CSVs WITH fake PII (inputs only)
+    raw/            # mock CSVs WITH fake PII (inputs only)
     clean/          # sanitized CSVs (gitignored, rebuilt)
     fixtures/       # ready-made node outputs, so nobody waits
     guardian.db     # SQLite ledger (gitignored, rebuilt)
@@ -105,8 +116,8 @@ Each simple node is **one Python file** containing plain functions and a `regist
 def register(mcp):
     @mcp.tool()
     @safe_tool
-    def account_score(customer_token: str) -> dict:
-        return score_customer(customer_token).model_dump()
+    def account_score_all() -> list[dict]:
+        return [s.model_dump() for s in score_all_customers()]
 ```
 Nodes write to the ledger with `ledger.store.append(...)` in Python. **`append` is not an MCP tool.**
 
@@ -115,21 +126,31 @@ Nodes write to the ledger with `ledger.store.append(...)` in Python. **`append` 
 ## 3. Tools and tasks per node
 
 ### A: Account (Owner-A)
+**Workflow:** mock CSV → sanitize → agentic workflow → ledger
+
+```
+1. generate_raw_data.py      → data/raw/transactions_raw.csv   (fake PII)      [code]
+2. sanitize_transactions()   → data/clean/transactions.csv     (tokens only)   [code]
+3. agent.py runbooks/a_account.md                                [AI follows runbook]
+     account_check_data → account_score_all → account_publish
+     → ledger_verify_chain → summary
+```
+
 **Raw columns:** customer_id, full_name, email, phone, dob, address, bsb, account_number, date, account_type, amount, category, merchant, description, balance_after.
 
 **After sanitizing:** customer_token, date, account_type, amount, category, merchant, balance_after.
 
 | Tool | Returns |
 |---|---|
-| `account_score(token)` | Score message: score, band, reasons |
-| `account_score_all()` | `[{token, score, band}]` |
+| `account_check_data()` | Row and customer counts, plus confirmation that only allow-listed columns are present |
+| `account_score_all()` | `[{token, score, band, reasons}]`, calculated by the rules in code |
 | `account_publish()` | Writes a SCORE entry per customer to the ledger and returns the count |
-| `account_rules()` | The rule table (so the AI can explain reasons) |
+| `account_rules()` | The rule table, so the AI can explain reasons |
 
 Tasks:
-- **A1.** `generate_raw_data.py` (transactions part): seeded raw CSV with fake PII, personas as in §5.
-- **A2.** Transactions section of `sanitize.py`: tokenise, apply the allow-list, drop `description` (it can contain names, e.g. "TRANSFER TO J CITIZEN").
-- **A3.** Signal rules:
+- **A1.** `generate_raw_data.py` (transactions part): seeded mock CSV with fake PII, personas as in §5.
+- **A2.** `sanitize_transactions()`: tokenise, apply the allow-list, drop `description` (it can contain names, e.g. "TRANSFER TO J CITIZEN").
+- **A3.** Signal rules in `nodes/account.py`:
   - salary stopped +25
   - dishonour +10
   - overdrawn +2 per day
@@ -137,32 +158,45 @@ Tasks:
   - loan arrears +15
   - cap at 100, then assign the band
   - Golden test: hero → **63 HIGH**
-- **A4.** The 4 tools.
-- **A5.** `ui/pages/A.py`: customer picker, reasons, score, and a "raw columns → kept columns" panel that shows what was dropped.
+- **A4.** The 4 tools + `runbooks/a_account.md`. Check that `--no-ai` and AI mode give the same ledger entries.
+- **A5.** `ui/pages/A.py`: "raw columns → kept columns" panel, a **Run workflow** button, the run log, and the score and reasons per customer.
 
 ### B: Interactions (Owner-B)
-**Raw columns:** customer_id, full_name, email, phone, staff_name, date, channel, type, form_status, callback_due, text (transcripts with names, numbers and so on).
+**Workflow:** mock input form → sanitize → agentic workflow → ledger
+
+```
+1. ui/pages/B.py mock form   pick a fake customer, channel, type; type free
+                             text (PII included)                           [human]
+2. sanitize_interaction()    on submit: tokenise, extract keyword flags,
+                             DELETE the text, append to clean CSV          [code]
+3. agent.py runbooks/b_interaction.md --token cust_xxxxxx   [AI follows runbook]
+     interaction_score → interaction_promises → interaction_publish
+     → ledger_verify_chain → summary
+```
+A small mock history CSV (`data/raw/interactions_raw.csv`) is sanitized the same way at reset, so rules like "3+ contacts in 14 days" and the scripted personas have data behind them.
+
+**Raw fields (form or CSV):** customer_id, full_name, email, phone, staff_name, date, channel, type, form_status, callback_due, text.
 
 **After sanitizing:** customer_token, staff_token, date, channel, type, form_status, callback_due, flags (e.g. `JOB_LOSS`, `CANT_AFFORD`). **The text is deleted.**
 
 | Tool | Returns |
 |---|---|
-| `interaction_score(token)` | Score message (source = INTERACTION) |
+| `interaction_score(token)` | Score message (source = INTERACTION), calculated by the rules in code |
 | `interaction_promises(token)` | Promise messages built from rules (HARDSHIP_FORM → HARDSHIP_RESPONSE due +21 days; CALLBACK_REQUEST → CALLBACK due `callback_due`). Descriptions come from fixed templates. |
-| `interaction_publish()` | Writes SCORE + PROMISE entries to the ledger |
+| `interaction_publish(token)` | Writes the SCORE + new PROMISE entries for that customer to the ledger |
 | `interaction_rules()` | The rule and keyword table |
 
 Tasks:
 - **B1.** `shared/pii_guard.py` + `tests/test_pii.py`. This is the security centrepiece.
-- **B2.** `generate_raw_data.py` (interactions part) + interactions section of `sanitize.py`: tokenise customers and staff, extract keyword flags, delete the text.
-- **B3.** Rules:
+- **B2.** `sanitize_interaction()` (used by both the form and the history CSV) + the mock history CSV with fake PII in the text.
+- **B3.** Rules in `nodes/interaction.py`:
   - form +40
   - keywords +25
   - 3+ contacts in 14 days +10
   - abandoned form +15
   - Golden test: hero → **50 MODERATE**
-- **B4.** The 4 tools.
-- **B5.** `ui/pages/B.py`: side-by-side raw vs sanitized row (local UI only, never the AI) and the extracted promises.
+- **B4.** The 4 tools + `runbooks/b_interaction.md`. Check that `--no-ai` and AI mode give the same ledger entries.
+- **B5.** `ui/pages/B.py`: the **mock input form**. On submit it shows "kept vs thrown away" (local UI only, never the AI), runs the workflow, and shows the promises that reached the ledger.
 
 ### C: Ledger (Owner-CD, full version)
 Each entry has the SPEC fields: entry_id, customer_token, entry_type, data, created_at, prev_hash, hash. Entry types are SCORE / PROMISE / CONTACT_SCHEDULED / ACTION / BLOCKED / STATUS_UPDATE, plus **RECOMMENDATION** and **APPROVAL** (additions to the spec).
@@ -176,7 +210,7 @@ Each entry has the SPEC fields: entry_id, customer_token, entry_type, data, crea
 | `ledger_risk_dashboard()` | Open promises sorted by combined score, then hours to due date |
 
 Tasks:
-- **C1 (Phase 0, first).** `schemas.py`, `config.py`, `store.py` (SQLite append/read), an empty `server.py`, and `.env.example`. Push to main so everyone can start.
+- **C1 (Phase 0, first).** `schemas.py`, `config.py`, `store.py` (SQLite append/read), an empty `server.py`, `shared/llm.py` and a basic `assert_no_pii` (B replaces it later). Push to main and share the `.env` values with the team outside GitHub.
 - **C2.** `chain.py`:
   - hash = sha256 of canonical JSON (sorted keys) of the entry plus prev_hash; the genesis entry's prev_hash is 64 zeros
   - SQLite triggers abort on UPDATE or DELETE
@@ -197,7 +231,7 @@ Tasks:
 Tasks:
 - **D1.** P1–P4 as pure functions, plus one test per policy.
 - **D2.** Recommendation rules.
-- **D3.** `agent.py` + the 3 runbooks (see §4).
+- **D3.** `agent.py` + `policy_sweep.md` and `execute.md` (see §4). Build `agent.py` early, since A and B use it for their workflows too.
 - **D4.** `data/fixtures/action_requests.json`: default notice, credit offer, scam call (wrong code), real call (right code).
 - **D5.** `ui/pages/D.py`: an action request form → decision, P1 alerts, and the agent run log.
 
@@ -216,29 +250,39 @@ Tasks:
 - **E2.** Tests: unapproved items are refused, approved items run, a meeting becomes a promise.
 - **E3.** `ui/pages/E.py`: approval queue (staff dropdown + Approve/Reject buttons) and a **mock phone**. The lock screen only says "You have a new message from Westpac"; tapping it shows the options and the call code. Includes a "verify caller code" box.
 - **E4.** `ui/app.py` home page: the A→E pipeline with live counts per node and a **"Next step"** button that walks SPEC's 10-step story.
-- **E5.** `scripts/reset_demo.py` (generate → sanitize → load → score) + a demo rehearsal checklist.
+- **E5.** `scripts/reset_demo.py` (generate → sanitize → run the A and B runbooks with `--no-ai`) + a demo rehearsal checklist.
 
 ---
 
 ## 4. AI workflow: markdown runbooks
-`agent.py` (about 100 lines):
-1. Reads a runbook.
+
+**The idea:** the AI is an operator with a checklist. The runbook says which tools to call and in what order; the tools (plain Python) do all the work; the AI then writes a short summary. The AI never scores, decides or approves anything.
+
+**`shared/llm.py`** (about 40 lines) is the only file that talks to OpenRouter:
+- uses the `openai` SDK with `base_url=https://openrouter.ai/api/v1` and the model from `.env`
+- `temperature=0`
+- runs `assert_no_pii()` on everything before sending it
+- logs each request and response to `data/runs/`
+
+Teammates may also call `llm.ask()` to **explain** results (e.g. an "Explain this score" button), but never inside scoring, policy or approval code.
+
+**`agent.py`** (about 100 lines) runs a runbook:
+1. Reads the runbook's tool list and instructions.
 2. Starts `server.py` over stdio with the `mcp` client.
 3. Gives the model **only** the tools listed in the runbook.
-4. Calls OpenRouter through the `openai` SDK (`base_url=https://openrouter.ai/api/v1`, model set in `.env`, `temperature=0`).
-5. Rejects any tool call that is out of order.
-6. Re-checks each result with `assert_no_pii`.
-7. Logs everything to `data/runs/`.
+4. Loops through `llm.py`: the AI asks for a tool, `agent.py` checks it's the next expected step (otherwise it stops with `OFF_SCRIPT`), calls the tool, and sends the result back.
+5. Logs every step to `data/runs/<run_id>.jsonl`, which the UI pages show.
 
 `--no-ai` calls the listed steps directly. This is the demo fallback and proves the result is the same.
 
-| Runbook | Steps |
-|---|---|
-| `1_score.md` | account_publish → interaction_publish → ledger_verify_chain |
-| `2_policy_sweep.md` | ledger_verify_chain (stop if invalid) → policy_deadlines → ledger_quiet_help_candidates → policy_recommend → short summary |
-| `3_execute.md` | actions_pending → actions_execute_approved → ledger_verify_chain → short summary |
+| Runbook | Owner | Steps |
+|---|---|---|
+| `a_account.md` | A | account_check_data → account_score_all → account_publish → ledger_verify_chain → summary |
+| `b_interaction.md` | B | interaction_score → interaction_promises → interaction_publish → ledger_verify_chain → summary (for one `--token`) |
+| `policy_sweep.md` | CD | ledger_verify_chain (stop if invalid) → policy_deadlines → ledger_quiet_help_candidates → policy_recommend → summary |
+| `execute.md` | CD | actions_pending → actions_execute_approved → ledger_verify_chain → summary |
 
-Example:
+Example (`runbooks/policy_sweep.md`):
 ```markdown
 ---
 tools: [ledger_verify_chain, policy_deadlines, ledger_quiet_help_candidates, policy_recommend]
@@ -252,7 +296,7 @@ Then write a 3-line summary using only numbers and tokens the tools returned.
 ## 5. Synthetic data (parallel work, not waterfall)
 
 ### Raw data
-`scripts/generate_raw_data.py` (fixed seed) writes `data/raw/transactions_raw.csv` and `data/raw/interactions_raw.csv` with **realistic fake PII**. The names, emails, phones and account numbers are invented, and transcripts mention names and numbers. This is exactly what the sanitizer must remove.
+`scripts/generate_raw_data.py` (fixed seed) writes `data/raw/transactions_raw.csv` (A's input) and `data/raw/interactions_raw.csv` (B's mock history) with **realistic fake PII**. The names, emails, phones and account numbers are invented, and the text mentions names and numbers. This is exactly what the sanitizer must remove. B's live input comes from the mock form on top of that history.
 
 Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator writes `fixtures/personas.json` (persona name → token), and tests look customers up by persona name.
 
@@ -284,8 +328,8 @@ Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator w
 | Page | Shows |
 |---|---|
 | Home (E) | Pipeline diagram with live counts + "Next step" story walkthrough |
-| A | Raw → kept columns, score and reasons per customer |
-| B | Raw vs sanitized interaction, extracted promises |
+| A | Raw → kept columns, Run workflow button + run log, score and reasons per customer |
+| B | Mock input form → kept vs thrown away → workflow run log → promises in the ledger |
 | C | Ledger with hashes, chain badge, tamper button, Risk Dashboard, Quiet Help list |
 | D | Action check (ALLOW/BLOCK), P1 alerts, AI run log |
 | E | Approval buttons + mock customer phone + caller code check |
@@ -294,7 +338,8 @@ Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator w
 
 ## 7. Hosting
 - Local laptops only, with code on GitHub.
-- Setup: `pip install -r requirements.txt`, then `cp .env.example .env`, then `python scripts/reset_demo.py`, then `streamlit run ui/app.py`.
+- Repo: https://github.com/d3ny-git/westpac-hackathon (private).
+- Setup: `pip install -r requirements.txt`, then create `.env` with the values Owner-CD shares (never committed), then `python scripts/reset_demo.py`, then `streamlit run ui/app.py`.
 - No database server and no deployment. The MCP server is started automatically by `agent.py` over stdio.
 - `.env`, `data/clean/`, `data/guardian.db` and `data/runs/` are gitignored. `data/raw/` is committed because it's fake.
 
@@ -302,7 +347,7 @@ Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator w
 - **GitHub Projects board** with columns To do / Doing / Review / Done. One issue per task (A1–E5), labelled by node.
 - **One branch per task.** PR into `main`; Owner-CD reviews anything in `shared/` or `sanitize.py`.
 - **Phases:**
-  - **Phase 0** (CD, first half-day): skeleton, schemas, ledger store, fixtures, README. A 30-minute MCP intro for the team.
+  - **Phase 0** (CD, first half-day): skeleton, schemas, ledger store, `shared/llm.py`, fixtures. A 30-minute MCP intro for the team.
   - **Phase 1:** everyone builds against fixtures until their golden tests pass.
   - **Phase 2:** swap fixtures for the real nodes; the full 10-step story runs.
   - **Phase 3:** UI polish and rehearsal.
@@ -311,6 +356,7 @@ Tokens come from HMAC, so they won't literally be `cust_8f2a91`. The generator w
 ## 9. Verification
 1. `pytest`: golden scores (63 / 50 / 75), P1–P4, the tamper test, and `test_pii.py`. That test calls every MCP tool and asserts no PII appears in its output; it also asserts that nothing under `nodes/` or `server.py` references `data/raw`.
 2. After `reset_demo.py`, grep `data/clean/`, `data/guardian.db`, `data/runs/` and the OpenRouter request logs for every fake name, email and phone from `data/raw/`: there must be **zero hits**.
-3. Run `python agent.py runbooks/2_policy_sweep.md --no-ai`, then the same command without `--no-ai`. The tool calls and ledger state should match.
-4. Run `python scripts/tamper_demo.py`: the C page badge goes red and shows the first bad entry.
-5. On a fresh reset, click "Next step" through all 10 SPEC steps. The default notice ends BLOCKED by P2 and the scam call ends BLOCKED by P3.
+3. For each runbook (`a_account.md`, `b_interaction.md`, `policy_sweep.md`, `execute.md`), run it with `--no-ai` and then without. The tool calls and ledger entries should match.
+4. Submit B's mock form with a fake name, phone and email in the text. Then grep the ledger and `data/runs/` for them: **zero hits**.
+5. Run `python scripts/tamper_demo.py`: the C page badge goes red and shows the first bad entry.
+6. On a fresh reset, click "Next step" through all 10 SPEC steps. The default notice ends BLOCKED by P2 and the scam call ends BLOCKED by P3.
