@@ -130,5 +130,5 @@ streamlit run ui/app.py
 
 - **One branch per task**, named `<node>/<short-name>`, e.g. `a/score-rules`, `b/pii-guard`, `c/hash-chain`.
 - Open a **pull request into `main`** when it's ready. Don't push straight to `main`.
-- **Owner-CD reviews any change to `shared/` or `sanitize.py`.** `shared/schemas.py` is the contract between nodes, so changes to it go through a PR everyone sees.
+- **Anyone can change `shared/`.** It's used by every node, so mention it in the team chat when you do. See [shared/README.md](shared/README.md).
 - **Never commit `.env` or real data.** Only fake data belongs in the repo (`mock_input_output/`, `data/raw/`). `.env`, `data/clean/`, `data/guardian.db` and `data/runs/` are gitignored.
