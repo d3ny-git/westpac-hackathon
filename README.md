@@ -25,7 +25,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | D-3 Deadline watcher (P1): `check_deadlines()` flags open promises due within 24h (ALERT) or overdue (ESCALATE) | Done |
 | D-4 Recommendations: `recommend()` suggests ESCALATE / BOOK_MEETING / QUIET_HELP_PUSH (awaiting human approval, no repeats within 30 days). `tracked_recommendations()` gives each one's status, ready for Node E | Done |
 | D-5 Explain: `explain(entry_id)` gives the facts behind any decision or recommendation (as known at the time, call codes hidden); `explain_in_words()` has the AI rephrase them for staff | Done |
-| Next for Owner-CD: D-6..D-8 (D's MCP tools, `agent.py`, runbooks), then the D page (D-9) | In progress |
+| D-6 Policy tools: `policy_check_action`, `policy_deadlines`, `policy_recommend`, `policy_explain` (the server now has 9 tools) | Done |
+| Next for Owner-CD: D-7/D-8 (`agent.py` runbook runner, runbooks), then the D page (D-9) | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline

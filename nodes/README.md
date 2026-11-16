@@ -5,7 +5,7 @@
 | A Account | `nodes/account.py` | Owner-A |
 | B Interactions | `nodes/interaction.py` | Owner-B |
 | C Ledger | `nodes/ledger/` (done: `store.py`, `chain.py`, `quiet_help.py`, `dashboard.py`, `tools.py`) | Owner-CD |
-| D Policy | `nodes/policy.py` | Owner-CD |
+| D Policy | `nodes/policy.py` (done: P1–P4, recommendations, explain, 4 tools) | Owner-CD |
 | E Actions | `nodes/actions.py` | Owner-E |
 
 Your node file holds two kinds of code:
