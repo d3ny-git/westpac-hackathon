@@ -1,5 +1,8 @@
-"""Demo controls, in one place for every page: load a story stage, hero's hardship form (the same as
-Node B's mock input form), simulate an insider edit, plus the story progress and pipeline counts."""
+"""Demo controls, in one place for every page: reset the demo with the real pipeline (or start empty),
+load the mock fixture stages, simulate an insider edit, plus the story progress and pipeline counts.
+
+Hero's hardship form (SPEC step 6) is submitted on the Interactions (B) page's mock input form.
+POST /api/demo/hero-form stays as the scripted shortcut (load_fixtures --step hero-form) for scripts."""
 from __future__ import annotations
 
 import json
@@ -11,17 +14,22 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import load_fixtures
+import reset_demo
 from api import story
-from api.common import CHECKABLE, HERO, STAFF
+from api.common import CHECKABLE, HERO, RUN_LOCK, STAFF
 from api.ledger import checkpoint_file
 from nodes.ledger import store
-from shared.config import now
+from shared.config import CLEAN_INTERACTIONS_FILE, CLEAN_TRANSACTIONS_FILE, clean_dir, now
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
 
 
 class LoadRequest(BaseModel):
     stage: Literal[load_fixtures.STAGES]       # "start" or "full"
+
+
+class ResetRequest(BaseModel):
+    empty: bool = False                        # True: sanitize + fresh ledger, but don't run A or B
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +60,25 @@ def meta() -> dict[str, Any]:
 
 @router.get("/status")
 def status() -> dict[str, Any]:
-    """How many entries the ledger has, and whether hero's hardship form is in it."""
+    """How many entries the ledger has, whether hero's hardship form is in it, and whether the clean
+    data A and B read (data/clean, written by the real-pipeline reset) is there."""
     count = store.count()
-    return {"count": count, "hero_form_submitted": count > 0 and load_fixtures.hero_form_submitted()}
+    return {"count": count, "hero_form_submitted": count > 0 and load_fixtures.hero_form_submitted(),
+            "clean_ready": all((clean_dir() / f).exists() for f in (CLEAN_TRANSACTIONS_FILE, CLEAN_INTERACTIONS_FILE))}
+
+
+@router.post("/reset")
+def reset(body: ResetRequest) -> dict[str, Any]:
+    """Reset the demo with the REAL pipeline (scripts/reset_demo.py): raw data -> sanitize -> Nodes A
+    and B -> a fresh ledger, with its PII self-check. empty=true stops after the fresh ledger, so A and
+    B can be run live on their pages. Clears the checkpoint."""
+    with RUN_LOCK:
+        try:
+            report = reset_demo.reset(quiet=True, empty=body.empty)
+        except reset_demo.ResetError as exc:
+            raise HTTPException(400, str(exc)) from None
+    checkpoint_file().unlink(missing_ok=True)
+    return {**report, "empty": body.empty}
 
 
 @router.post("/load")

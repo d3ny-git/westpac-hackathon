@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+import sanitize
 from api.common import HERO
 from nodes.actions import actions_inbox
 from nodes.ledger import store
@@ -26,6 +27,7 @@ from nodes.ledger.chain import verify_chain
 from nodes.ledger.quiet_help import (combined_score, open_hardship_case, open_promises, quiet_help_candidates,
                                      tracked_recommendations)
 from nodes.policy import check_deadlines
+from shared.config import CLEAN_INTERACTIONS_FILE, CLEAN_TRANSACTIONS_FILE, clean_dir
 
 # (route, what the SPEC says happens). Titles follow the SPEC's "one customer, start to finish" table.
 STEPS = [
@@ -41,7 +43,8 @@ STEPS = [
     ("Scam caller → D", "Wrong call code → BLOCKED (P3)"),
 ]
 
-PAGES = {"Home": "/", "Ledger": "/ledger", "Policy": "/policy", "Actions": "/actions"}
+PAGES = {"Home": "/", "Account": "/account", "Interactions": "/interactions", "Ledger": "/ledger",
+         "Policy": "/policy", "Actions": "/actions"}
 
 
 def _hint(page: str, text: str) -> dict[str, str]:
@@ -59,7 +62,7 @@ def _rec_hint(recs: list, kind: str, customer: str, sweep_text: str) -> dict[str
     if latest.current_status == "APPROVED":
         return _hint("Actions", f"Approval Queue: Execute {rid} ({kind} for {customer})")
     if latest.current_status == "REJECTED":
-        return _hint("Home", f"{rid} was rejected, so nothing was sent. Load the 'start' stage to play it again")
+        return _hint("Home", f"{rid} was rejected, so nothing was sent. Reset the demo to play it again")
     return _hint("Actions", f"{rid} is {latest.current_status}")
 
 
@@ -87,15 +90,16 @@ def progress(customer: str = HERO) -> dict[str, Any]:
     p3 = of("BLOCKED", policy="P3")
     qh, bm = by_kind["QUIET_HELP_PUSH"], by_kind["BOOK_MEETING"]
 
-    load_hint = _hint("Home", "Demo controls: load the 'start' stage")
-    form_hint = _hint("Home", "Demo controls: 'Hero submits the hardship form' (the same as Node B's mock input form)")
+    load_hint = _hint("Home", "Demo controls: Reset demo (real pipeline)")
+    run_a_hint = _hint("Account", "Run Node A's workflow (with or without the AI)")
+    form_hint = _hint("Interactions", "Mock input form: 'Fill in: hero's hardship form' → Submit to Node B")
     done: list[tuple[bool, Optional[str], dict[str, str]]] = [
         (bool(account),
          f"ACCOUNT score {account[-1].data['score']} {account[-1].data['band']}" if account else None,
-         load_hint),
+         run_a_hint),
         (on_list or bool(qh),
          "On the Quiet Help list" if on_list else ("Was on the list (D recommended a push)" if qh else None),
-         _hint("Home", "Hero must be HIGH with no open case and no recent push: load the 'start' stage")),
+         _hint("Home", "Hero must be HIGH with no open case and no recent push: Reset demo (real pipeline)")),
         (bool(qh), f"{qh[0].recommendation.rec_id} QUIET_HELP_PUSH" if qh else None,
          _hint("Policy", "Policy sweep: run it (with or without the AI)")),
         (bool(approved(qh)),
@@ -121,13 +125,22 @@ def progress(customer: str = HERO) -> dict[str, Any]:
     steps = [{"n": n, "route": route, "title": title, "done": ok, "detail": detail if ok else None,
               "hint": None if ok else hint}
              for n, ((route, title), (ok, detail, hint)) in enumerate(zip(STEPS, done), start=1)]
-    if not entries:                                       # empty ledger: everything starts with loading
+    if store.count() == 0:                                # empty ledger: everything starts with a reset
         for s in steps:
             s["hint"] = load_hint
+    elif not entries:                                     # "Start empty": A hasn't scored anyone yet
+        for s in steps:
+            s["hint"] = run_a_hint
     current = next((s for s in steps if not s["done"]), None)
     return {"customer_token": customer, "steps": steps, "done_count": sum(s["done"] for s in steps),
             "total": len(steps), "current": current["n"] if current else None,
             "next": current["hint"] if current else None, "complete": current is None}
+
+
+def _clean_rows(name: str) -> Optional[int]:
+    """How many rows a clean CSV has (None when the real-pipeline reset hasn't made it yet)."""
+    path = clean_dir() / name
+    return len(sanitize.read_csv(path)) if path.exists() else None
 
 
 def pipeline() -> dict[str, Any]:
@@ -146,8 +159,10 @@ def pipeline() -> dict[str, Any]:
     customers = sorted({e.customer_token for e in entries})
     messages = sum(len(actions_inbox(c)) for c in customers) if entries else 0
     return {
-        "A": {"account_scores": count("SCORE", source="ACCOUNT")},
-        "B": {"interaction_scores": count("SCORE", source="INTERACTION"),
+        "A": {"clean_transactions": _clean_rows(CLEAN_TRANSACTIONS_FILE),
+              "account_scores": count("SCORE", source="ACCOUNT")},
+        "B": {"clean_interactions": _clean_rows(CLEAN_INTERACTIONS_FILE),
+              "interaction_scores": count("SCORE", source="INTERACTION"),
               "promises": sum(1 for e in entries if e.entry_type == "PROMISE"
                               and e.data.get("promise_type") != "MEETING")},
         "C": {"entries": len(entries), "valid": report.valid, "customers": len(customers),

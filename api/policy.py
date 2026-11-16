@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import re
-import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -15,7 +14,7 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel
 
 import agent
-from api.common import REPO, hide_call_codes
+from api.common import REPO, RUN_LOCK, hide_call_codes
 from nodes.ledger import store
 from nodes.ledger.quiet_help import tracked_recommendations
 from nodes.policy import check_action, check_deadlines, explain, explain_in_words
@@ -25,7 +24,6 @@ router = APIRouter(prefix="/api/policy", tags=["policy"])
 
 SWEEP = REPO / "runbooks" / "policy_sweep.md"
 _RUN_ID = re.compile(r"^[A-Za-z0-9_.-]+$")       # run ids are file names: never let a path through
-_sweep_lock = threading.Lock()                    # one sweep at a time (a double click waits its turn)
 
 
 class CheckRequest(BaseModel):
@@ -91,7 +89,7 @@ def explain_entry_in_words(entry_id: str = PathParam(pattern=ENTRY_ID_PATTERN)) 
 @router.post("/sweep")
 def sweep(ai: bool = Query(default=False)) -> dict[str, Any]:
     """Run runbooks/policy_sweep.md (agent.run), with the AI or without it. Both leave the ledger identical."""
-    with _sweep_lock:
+    with RUN_LOCK:
         result = agent.run(SWEEP, ai=ai)
     return {"run_id": result.run_id, "status": result.status, "mode": result.mode,
             "summary": result.summary, "error": result.error}

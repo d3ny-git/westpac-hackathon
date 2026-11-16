@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,26 @@ CHECKABLE = (sorted(a.value for a in COLLECTIONS_ACTIONS) + sorted(a.value for a
              + [ActionType.VERIFY_CALLER.value])
 
 HIDDEN = "(hidden)"
+
+# One workflow at a time (sweeps, A's and B's runbooks, resets): a double click waits its turn.
+RUN_LOCK = threading.RLock()
+_server = None
+
+
+def mcp_server():
+    """One in-process MCP server for the A and B runbook runs (as ui/pages/A.py and B.py cache one)."""
+    global _server
+    if _server is None:
+        from server import build_server
+        _server = build_server()[0]
+    return _server
+
+
+def present_run(result) -> dict[str, Any]:
+    """An agent.RunResult for the screen: status, each step's output, summary (call codes hidden)."""
+    return hide_call_codes({"run_id": result.run_id, "runbook": result.runbook, "mode": result.mode,
+                            "status": result.status, "summary": result.summary, "error": result.error,
+                            "steps": [s.model_dump() for s in result.steps]})
 
 
 def hide_call_codes(value: Any) -> Any:

@@ -7,7 +7,8 @@ Rules (docs/REACT_UI_PLAN.md):
   - bound to 127.0.0.1 only (app.py); CORS only for the Vite dev server (npm run dev)
   - invalid input -> 422; LedgerError / PolicyError / ExecutionError -> 400 with their readable message
   - every JSON response is PII-checked with shared.pii_guard.find_pii (defence in depth); anything
-    that looks like PII is blocked with a 500 that names only the KIND of PII
+    that looks like PII is blocked with a 500 that names only the KIND of PII. The only exceptions are
+    the RAW_VIEWS below: local views of the demo's fake raw data on the A and B pages
   - error messages never echo what was typed (it might be PII)
 """
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -26,8 +27,9 @@ from pydantic import ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from api import actions, demo, ledger, policy
+from api import account, actions, demo, interaction, ledger, policy
 from api.common import REPO
+from nodes.account import AccountError
 from nodes.actions import ExecutionError
 from nodes.ledger.store import LedgerError
 from nodes.policy import PolicyError
@@ -62,24 +64,42 @@ def _without_hashes(value: Any) -> Any:
     return value
 
 
-def pii_in(body: bytes) -> list[str]:
-    """The kinds of PII found in a JSON response body (never the values)."""
+def pii_in(body: bytes, exempt_field: Optional[str] = None) -> list[str]:
+    """The kinds of PII found in a JSON response body (never the values). `exempt_field` leaves out
+    one top-level field of the response (only for a RAW_VIEWS entry, below)."""
     try:
         data = json.loads(body)
     except ValueError:
         return find_pii(body.decode("utf-8", errors="replace"))
+    if exempt_field and isinstance(data, dict):
+        data = {k: v for k, v in data.items() if k != exempt_field}
     return find_pii(_without_hashes(data))
 
 
+# THE allow-list: the only responses NOT fully PII-checked. They are LOCAL views of the demo's raw
+# data (fake PII), shown so people can see what the sanitizer keeps and throws away
+# (docs/MCP_PLAN.md §6). Raw data never goes through MCP or the AI, and none of it is stored.
+#   value WHOLE_RESPONSE  the whole (successful) response is the raw view
+#   value "<field>"       only that top-level field is the raw view; the rest is still checked
+# Everything else, and every error response, is checked. tests/test_api.py pins this list.
+WHOLE_RESPONSE = "*"
+RAW_VIEWS: dict[tuple[str, str], str] = {
+    ("GET", "/api/account/raw-sample"): WHOLE_RESPONSE,        # A: one customer's raw row (+ the people picker)
+    ("GET", "/api/interaction/form-options"): WHOLE_RESPONSE,  # B: customer/staff pickers + the 2 examples
+    ("POST", "/api/interaction/submit"): "thrown_away",        # B: what the sanitizer threw away
+}
+
+
 class PIIGuard(BaseHTTPMiddleware):
-    """Checks every JSON response from /api before it leaves the server."""
+    """Checks every JSON response from /api before it leaves the server (except the RAW_VIEWS)."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
         if not request.url.path.startswith("/api") or "json" not in response.headers.get("content-type", ""):
             return response
         body = b"".join([chunk async for chunk in response.body_iterator])
-        kinds = pii_in(body)
+        raw_view = RAW_VIEWS.get((request.method, request.url.path)) if response.status_code < 300 else None
+        kinds = [] if raw_view == WHOLE_RESPONSE else pii_in(body, exempt_field=raw_view)
         if kinds:
             return JSONResponse({"detail": f"Response blocked: PII detected ({', '.join(kinds)}). Nothing was sent."},
                                 status_code=500)
@@ -114,7 +134,7 @@ def _register_errors(app: FastAPI) -> None:
     async def refused(_request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=400)
 
-    for kind in (LedgerError, PolicyError, ExecutionError, PIIError):
+    for kind in (LedgerError, PolicyError, ExecutionError, AccountError, PIIError):
         app.add_exception_handler(kind, refused)
 
 
@@ -134,7 +154,7 @@ def create_app(web_dist: Path = WEB_DIST) -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=DEV_ORIGINS, allow_methods=["GET", "POST"],
                        allow_headers=["Content-Type"])
     _register_errors(app)
-    for module in (ledger, policy, actions, demo):
+    for module in (account, interaction, ledger, policy, actions, demo):
         app.include_router(module.router)
 
     if (web_dist / "index.html").is_file():
