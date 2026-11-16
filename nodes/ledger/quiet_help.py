@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from nodes.ledger import store
 from shared.config import (HIGH_OR_ABOVE, QUIET_HELP_COOLDOWN, ActionType, EntryType,
                            PromiseStatus, PromiseType, Source, band, now)
-from shared.schemas import LedgerEntry, Promise
+from shared.schemas import LedgerEntry, Promise, Recommendation
 
 DbPath = Optional[Path | str]
 
@@ -192,3 +192,42 @@ def quiet_help_candidates(*, db_path: DbPath = None) -> list[QuietHelpCandidate]
 
     candidates.sort(key=lambda c: (-c.score, c.customer_token))   # highest score first; ties in token order
     return candidates
+
+
+# ---------------------------------------------------------------------------
+# Recommendations and their current status (used by D-4 and Node E)
+# ---------------------------------------------------------------------------
+class TrackedRecommendation(BaseModel):
+    """A recommendation plus where it is now. Like promises, the RECOMMENDATION entry is never
+    edited: later APPROVAL and STATUS_UPDATE entries say what happened to it."""
+    recommendation: Recommendation
+    current_status: str                # AWAITING_APPROVAL / APPROVED / REJECTED / DONE
+    entry_id: str                      # the RECOMMENDATION entry, e.g. "E-0021"
+    recorded_at: datetime              # when D made the recommendation
+    decided_by: Optional[str] = None   # the staff token who approved or rejected it
+
+
+def tracked_recommendations(customer_token: Optional[str] = None, *,
+                            db_path: DbPath = None) -> list[TrackedRecommendation]:
+    """Every recommendation (for one customer, or everyone) with its current status, oldest first.
+
+    Status: starts AWAITING_APPROVAL -> an APPROVAL entry makes it APPROVED (or REJECTED) ->
+    a STATUS_UPDATE for the R-xxxx id (e.g. from Node E) sets it directly, e.g. DONE.
+    """
+    entries = store.read(customer_token=customer_token,
+                         entry_type=[EntryType.RECOMMENDATION, EntryType.APPROVAL, EntryType.STATUS_UPDATE],
+                         db_path=db_path)
+    tracked: dict[str, TrackedRecommendation] = {}
+    for entry in entries:
+        d = entry.data
+        if entry.entry_type == EntryType.RECOMMENDATION.value:
+            rec = Recommendation(**d)
+            tracked[rec.rec_id] = TrackedRecommendation(recommendation=rec, current_status=rec.status,
+                                                        entry_id=entry.entry_id, recorded_at=entry.created_at)
+        elif entry.entry_type == EntryType.APPROVAL.value and d["rec_id"] in tracked:
+            t = tracked[d["rec_id"]]
+            t.current_status = "APPROVED" if d["approved"] else "REJECTED"
+            t.decided_by = d["approved_by"]
+        elif entry.entry_type == EntryType.STATUS_UPDATE.value and d["ref_id"] in tracked:
+            tracked[d["ref_id"]].current_status = d["status"]      # P-xxxx updates are skipped
+    return list(tracked.values())

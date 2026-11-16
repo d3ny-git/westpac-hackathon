@@ -86,6 +86,8 @@ def band(score: int) -> Band:
 HARDSHIP_RESPONSE_DAYS = 21                    # SPEC: a hardship form starts a 21-day response deadline
 P1_ALERT_WINDOW = timedelta(hours=24)          # P1: a promise due within this window is "near"
 QUIET_HELP_COOLDOWN = timedelta(days=30)       # Quiet Help: max one push per customer per 30 days
+RECOMMENDATION_COOLDOWN = timedelta(days=30)   # D won't repeat the same recommendation to a customer
+                                               # within 30 days (e.g. after a person rejected it)
 
 
 # ---------------------------------------------------------------------------

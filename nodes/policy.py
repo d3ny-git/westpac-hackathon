@@ -1,4 +1,4 @@
-"""Node D: the Policy Agent (D-1 gatekeeper, D-2 caller check, D-3 deadline watcher).
+"""Node D: the Policy Agent (D-1 gatekeeper, D-2 caller check, D-3 deadline watcher, D-4 recommendations).
 
 D has two jobs:
   1. Gatekeeper, check_action(): before the bank does something to a customer (sends a default
@@ -7,6 +7,8 @@ D has two jobs:
      a plain-English reason. Every answer is written back to the ledger.
   2. Watcher, check_deadlines(): looks through every open promise and flags the ones that are
      about to be missed (ALERT) or already were (ESCALATE).
+  3. Recommender, recommend(): turns what the ledger shows into suggestions (Quiet Help push,
+     book a meeting, escalate). Nothing happens until a PERSON approves one in Node E.
 
 The rules are plain Python, not AI: the same ledger and the same request always give the same answer.
 
@@ -36,10 +38,12 @@ from pathlib import Path
 from typing import Optional
 
 from nodes.ledger import store
-from nodes.ledger.quiet_help import CombinedScore, combined_score, open_hardship_case, open_promises
+from nodes.ledger.quiet_help import (CombinedScore, combined_score, open_hardship_case, open_promises,
+                                     quiet_help_candidates, tracked_recommendations)
 from shared.config import (COLLECTIONS_ACTIONS, CREDIT_OFFER_ACTIONS, HARDSHIP_RESPONSE_DAYS, HIGH_OR_ABOVE,
-                           P1_ALERT_WINDOW, ActionType, DeadlineLevel, DecisionResult, EntryType, PolicyId, now)
-from shared.schemas import ActionRequest, ContactScheduled, DeadlineAlert, Decision, Promise
+                           P1_ALERT_WINDOW, RECOMMENDATION_COOLDOWN, ActionType, DeadlineLevel, DecisionResult,
+                           EntryType, PolicyId, PromiseType, RecommendationType, now)
+from shared.schemas import ActionRequest, ContactScheduled, DeadlineAlert, Decision, Promise, Recommendation
 
 DbPath = Optional[Path | str]
 
@@ -229,3 +233,74 @@ def check_deadlines(*, db_path: DbPath = None) -> list[DeadlineAlert]:
     alerts = [a for t in open_promises(db_path=db_path) if (a := p1_deadline(t.promise, at))]
     alerts.sort(key=lambda a: (a.level != DeadlineLevel.ESCALATE.value, a.hours_to_due, a.promise_id))
     return alerts
+
+
+# ---------------------------------------------------------------------------
+# Recommendations (D-4)
+# ---------------------------------------------------------------------------
+# Statuses that mean "this recommendation is still in play", so D must not suggest it again.
+_STILL_OPEN = {"AWAITING_APPROVAL", "APPROVED"}
+
+
+def _already_recommended(token: str, kind: str, history, at: datetime) -> bool:
+    """True if D already suggested `kind` for this customer and shouldn't again:
+    it's still waiting / approved, or it was made (and then done or rejected) within the last 30 days."""
+    for t in history:
+        r = t.recommendation
+        if r.customer_token != token or r.recommendation != kind:
+            continue
+        if t.current_status in _STILL_OPEN or t.recorded_at > at - RECOMMENDATION_COOLDOWN:
+            return True
+    return False
+
+
+def recommend(*, db_path: DbPath = None) -> list[Recommendation]:
+    """Turn what the ledger shows into NEW recommendations, record them, and return them.
+
+    The rules (plain Python, in this order):
+      ESCALATE         a promise to the customer is overdue (P1)
+      BOOK_MEETING     the customer has an open hardship case but no meeting booked
+      QUIET_HELP_PUSH  the customer is on the Quiet Help list (C-6)
+
+    No repeats: D skips a recommendation if the same one for the same customer is still awaiting
+    approval / approved, or was made in the last 30 days (so a rejection isn't re-suggested the
+    next day). Running it twice in a row therefore creates nothing the second time.
+
+    Each new recommendation is written to the ledger as AWAITING_APPROVAL. Nothing is sent to a
+    customer until a person approves it in Node E.
+    """
+    at = now()
+    history = tracked_recommendations(db_path=db_path)
+    wanted: list[tuple[str, str, list[str]]] = []          # (customer, recommendation, why)
+
+    # 1. ESCALATE: overdue promises (one recommendation per customer, listing what's overdue).
+    overdue: dict[str, list[str]] = {}
+    for alert in check_deadlines(db_path=db_path):
+        if alert.level == DeadlineLevel.ESCALATE.value:
+            overdue.setdefault(alert.customer_token, []).append(f"{alert.promise_type}_OVERDUE")
+    for token, whys in overdue.items():
+        wanted.append((token, RecommendationType.ESCALATE.value, ["P1_PROMISE_MISSED", *dict.fromkeys(whys)]))
+
+    # 2. BOOK_MEETING: open hardship case, but no meeting promise yet.
+    open_now = open_promises(db_path=db_path)
+    has_meeting = {t.promise.customer_token for t in open_now if t.promise.promise_type == PromiseType.MEETING.value}
+    cases = sorted({t.promise.customer_token for t in open_now
+                    if t.promise.promise_type == PromiseType.HARDSHIP_RESPONSE.value} - has_meeting)
+    for token in cases:
+        wanted.append((token, RecommendationType.BOOK_MEETING.value, ["HARDSHIP_CASE_OPEN", "NO_MEETING_BOOKED"]))
+
+    # 3. QUIET_HELP_PUSH: the Quiet Help list (already sorted, highest score first).
+    for c in quiet_help_candidates(db_path=db_path):
+        wanted.append((c.customer_token, RecommendationType.QUIET_HELP_PUSH.value,
+                       [f"SCORE_{c.band}", *c.reasons]))
+
+    # 4. Record the ones that aren't repeats.
+    created: list[Recommendation] = []
+    for token, kind, why in wanted:
+        if _already_recommended(token, kind, history, at):
+            continue
+        rec = Recommendation(rec_id=store.next_id("R", db_path=db_path), customer_token=token,
+                             recommendation=kind, why=why)
+        store.append(EntryType.RECOMMENDATION, token, rec.model_dump(mode="json"), db_path=db_path)
+        created.append(rec)
+    return created
