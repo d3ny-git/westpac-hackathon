@@ -17,7 +17,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | C-2 Ledger store: `store.append()`, `read()`, `next_id()` | Done |
 | C-7 MCP server: `server.py` + `scripts/try_tool.py`. **A, B, E can now add their tools** ([nodes/README.md](nodes/README.md)) | Done |
 | C-3 Tamper check: `verify_chain()` + `ledger_verify_chain` tool | Done |
-| Next for Owner-CD: C-5/C-6 ledger logic, D policy agent, `agent.py` | In progress |
+| C-5/C-6 Ledger logic: combined score, open hardship case, Quiet Help list, Risk Dashboard. **All 5 ledger tools done** | Done |
+| Next for Owner-CD: D policy agent, `agent.py`, C-8 seed data, UI pages | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
