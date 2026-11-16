@@ -170,10 +170,10 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 - [x] Activity & Status: recommendation status table, ledger activity table (newest first), "append-only, no reset here" note
 
 ### New in the React UI
-- [ ] Home: C → D → E pipeline with live counts per node
-- [ ] Home: the 10-step story ticks itself, with a "next: go to … and do …" hint
-- [ ] Demo controls in one shared panel (load stage, hero form, insider edit, checkpoint)
-- [ ] One tab, always fresh (TanStack Query refetch on focus + every 3 s, invalidated after every button)
+- [x] Home: C → D → E pipeline with live counts per node
+- [x] Home: the 10-step story ticks itself, with a "next: go to … and do …" hint
+- [x] Demo controls in one shared panel (load stage, hero form, insider edit, checkpoint)
+- [x] One tab, always fresh (TanStack Query refetch on focus + every 3 s, invalidated after every button)
 
 ## Deviations from the plan (and why)
 - (filled in while building)
