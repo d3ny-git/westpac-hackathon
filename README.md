@@ -24,7 +24,8 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | D-2 Caller check (P3): a caller is ALLOWED only if their call code matches a booked call (`CONTACT_SCHEDULED`); otherwise BLOCKED as a possible scam | Done |
 | D-3 Deadline watcher (P1): `check_deadlines()` flags open promises due within 24h (ALERT) or overdue (ESCALATE) | Done |
 | D-4 Recommendations: `recommend()` suggests ESCALATE / BOOK_MEETING / QUIET_HELP_PUSH (awaiting human approval, no repeats within 30 days). `tracked_recommendations()` gives each one's status, ready for Node E | Done |
-| Next for Owner-CD: D-5..D-8 (explain, tools, `agent.py`, runbooks), then the D page (D-9) | In progress |
+| D-5 Explain: `explain(entry_id)` gives the facts behind any decision or recommendation (as known at the time, call codes hidden); `explain_in_words()` has the AI rephrase them for staff | Done |
+| Next for Owner-CD: D-6..D-8 (D's MCP tools, `agent.py`, runbooks), then the D page (D-9) | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
