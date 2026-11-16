@@ -235,6 +235,7 @@ class DeadlineAlert(Contract):
     level: DeadlineLevel               # ALERT (due soon) or ESCALATE (overdue)
     hours_to_due: float                # negative when overdue
     policy: Literal["P1"] = "P1"
+    reason: str = Field(default="", max_length=300)   # plain English, e.g. "Callback was due 2 days ago (14 Nov 10:00)"
 
 
 class Recommendation(Contract):
