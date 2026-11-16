@@ -28,6 +28,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from api import account, actions, demo, interaction, ledger, policy
+from api import customer, live, westpac          # the live apps: /customer and /westpac (ui/live-apps)
 from api.common import REPO
 from nodes.account import AccountError
 from nodes.actions import ExecutionError
@@ -87,6 +88,9 @@ RAW_VIEWS: dict[tuple[str, str], str] = {
     ("GET", "/api/account/raw-sample"): WHOLE_RESPONSE,        # A: one customer's raw row (+ the people picker)
     ("GET", "/api/interaction/form-options"): WHOLE_RESPONSE,  # B: customer/staff pickers + the 2 examples
     ("POST", "/api/interaction/submit"): "thrown_away",        # B: what the sanitizer threw away
+    # Customer-only views (the customer app): the customer's OWN name and transactions, shown only to them.
+    ("GET", "/api/customer/sign-in-options"): WHOLE_RESPONSE,  # who you can sign in as (demo)
+    ("GET", "/api/customer/overview"): WHOLE_RESPONSE,         # your accounts and recent transactions
 }
 
 
@@ -155,6 +159,8 @@ def create_app(web_dist: Path = WEB_DIST) -> FastAPI:
                        allow_headers=["Content-Type"])
     _register_errors(app)
     for module in (account, interaction, ledger, policy, actions, demo):
+        app.include_router(module.router)
+    for module in (customer, westpac, live):           # the live apps (ui/live-apps)
         app.include_router(module.router)
 
     if (web_dist / "index.html").is_file():
