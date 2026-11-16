@@ -88,6 +88,20 @@ def sort_interactions(clean_rows: Iterable[dict[str, str]]) -> list[dict[str, st
     return sorted(clean_rows, key=lambda r: (r["date"], r["customer_token"]))
 
 
+def add_interaction(raw_row: Mapping[str, Any], out_dir: Path | str | None = None) -> dict[str, str]:
+    """B's mock input form (B5): sanitize ONE new raw interaction and add it to the clean data.
+
+    The raw row (with its PII and free text) is never stored: only the clean row is written to
+    data/clean/interactions.csv (kept in date order). Returns the clean row.
+    """
+    path = Path(out_dir or clean_dir()) / CLEAN_INTERACTIONS
+    if not path.exists():
+        raise FileNotFoundError("There's no clean interaction data yet. Run `python scripts/reset_demo.py` first.")
+    clean = sanitize_interaction(raw_row)
+    write_csv(path, sort_interactions(read_csv(path) + [clean]), CLEAN_INTERACTION_COLUMNS)
+    return clean
+
+
 # ---------------------------------------------------------------------------
 # Checks and files
 # ---------------------------------------------------------------------------

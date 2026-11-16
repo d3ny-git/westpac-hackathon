@@ -3,7 +3,7 @@
     python scripts/load_fixtures.py                  # stage "start" (the demo's starting point)
     python scripts/load_fixtures.py --stage full     # everything, up to E's actions
     python scripts/load_fixtures.py --reset          # wipe an existing ledger first
-    python scripts/load_fixtures.py --step hero-form # hero submits the hardship form (stand-in for Node B)
+    python scripts/load_fixtures.py --step hero-form # hero submits the hardship form (scripted shortcut)
 
 Stages (the SPEC's story for hero, cust_af4200):
 
@@ -16,12 +16,11 @@ Stages (the SPEC's story for hero, cust_af4200):
           R-0005 is still awaiting approval, so E's approval queue isn't empty, and P3 has
           a real call code to check.
 
-Stand-in for Node B's form (FLOW-2):
+Scripted shortcut for SPEC step 6:
 
-  --step hero-form   adds what Node B would write when hero submits the hardship form through
-                     B's mock input form (B5): hero's new INTERACTION score (50) and the 21-day
-                     HARDSHIP_RESPONSE promise. It's B's own mock output, so this is only a
-                     temporary stand-in until B's real form exists. It doesn't reset anything.
+  --step hero-form   hero submits the hardship form, the same as filling in the B page's mock
+                     input form (ui/pages/B.py). After reset_demo.py it goes through Node B for
+                     real (score 50 + a 21-day HARDSHIP_RESPONSE promise). It doesn't reset anything.
 
 Where the data comes from: mock_input_output/ (A, B and E samples), plus the few extra entries
 in data/fixtures/seed_extras.json. Nothing is copied, so there's only ever one version of it.
@@ -47,7 +46,7 @@ from nodes.ledger import store  # noqa: E402
 from nodes.ledger.chain import verify_chain  # noqa: E402
 from nodes.ledger.dashboard import risk_dashboard  # noqa: E402
 from nodes.ledger.quiet_help import combined_score, has_open_hardship_case, quiet_help_candidates  # noqa: E402
-from shared.config import CLEAN_INTERACTION_COLUMNS, CLEAN_INTERACTIONS_FILE, clean_dir  # noqa: E402
+from shared.config import CLEAN_INTERACTIONS_FILE, clean_dir  # noqa: E402
 
 MOCK = REPO / "mock_input_output"
 EXTRAS = REPO / "data" / "fixtures" / "seed_extras.json"
@@ -122,17 +121,16 @@ def hero_form_submitted(*, db_path: Optional[Path | str] = None) -> bool:
 
 
 def submit_hero_form(*, db_path: Optional[Path | str] = None) -> int:
-    """FLOW-2 stand-in for Node B's mock input form (B5): hero submits the hardship form.
-    Returns how many ledger entries were added.
+    """Scripted shortcut: hero submits the hardship form (SPEC step 6). Returns ledger entries added.
 
-    When the clean data exists (after `scripts/reset_demo.py`), the form goes through Node B's
-    REAL path, exactly what B5 will do: hero's raw form (with fake PII, from
-    mock_input_output/B_interaction/input/form_submissions.json) is sanitized, added to
-    data/clean/interactions.csv, and published by Node B. Otherwise (a ledger loaded from the
-    mock fixtures) B's mock output for hero is written instead.
+    In the demo this is done on the B page's mock input form (ui/pages/B.py). This function does
+    the same thing for scripts and tests. When the clean data exists (after
+    `scripts/reset_demo.py`) it goes through Node B's REAL path: hero's raw form (with fake PII,
+    from mock_input_output/B_interaction/input/form_submissions.json) is sanitized, added to
+    data/clean/interactions.csv, and published by Node B. On a ledger loaded from the mock
+    fixtures, B's mock output for hero is written instead.
 
     Refuses on an empty ledger (load a stage first) and if the form is already in the ledger.
-    Remove this once B5's form page exists.
     """
     if store.count(db_path=db_path) == 0:
         raise SystemExit("The ledger is empty. Load a stage first.")
@@ -153,9 +151,7 @@ def _submit_hero_form_through_node_b(db_path: Optional[Path | str]) -> int:
 
     raw_form = next(f for f in _json(MOCK / "B_interaction/input/form_submissions.json")
                     if f["customer_id"] == HERO_CUSTOMER_ID)
-    clean_file = clean_dir() / CLEAN_INTERACTIONS_FILE
-    rows = sanitize.read_csv(clean_file) + [sanitize.sanitize_interaction(raw_form)]
-    sanitize.write_csv(clean_file, sanitize.sort_interactions(rows), CLEAN_INTERACTION_COLUMNS)
+    sanitize.add_interaction(raw_form)                # the same call the B page's form makes
 
     before = store.count(db_path=db_path)
     if db_path is not None:
@@ -214,7 +210,7 @@ def main() -> None:
     db = Path(args.db or os.getenv("GUARDIAN_DB", store.DEFAULT_DB))
     if args.step == "hero-form":
         added = submit_hero_form(db_path=db)
-        print(f"Hero submitted the hardship form (stand-in for Node B): {added} entries added to {db}.\n")
+        print(f"Hero submitted the hardship form: {added} entries added to {db}.\n")
         print(summary(db))
         return
     added = load(args.stage, db_path=db, reset=args.reset)
