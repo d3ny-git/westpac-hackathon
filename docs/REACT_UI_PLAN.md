@@ -176,4 +176,42 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 - [x] One tab, always fresh (TanStack Query refetch on focus + every 3 s, invalidated after every button)
 
 ## Deviations from the plan (and why)
-- (filled in while building)
+- **Story guide component.** GEL's `ProgressIndicator` is a loading spinner, not a list of steps. The
+  10-step guide uses GEL's `ProgressRope` (vertical connected steps, ticking itself), with a
+  `ProgressBar` for "N of 10" and a `Badge` on every done step (steps can happen out of order).
+  `ProgressIndicator` is used where it fits: the spinner while a policy sweep runs.
+- **Call code on the phone.** GEL's `PassCodeView` is a code *entry* screen (with "update" and
+  "Resend code" links), so the booked call's code is shown with GEL's `PassCode` (six boxes, read-only)
+  inside the phone `Panel`. Caller verification keeps E.py's free-text box (GEL `Field` + `Input`, up
+  to 12 characters), so codes typed like `u5p-xlw` still work.
+- **Call codes are hidden in the Ledger view.** C.py shows a CONTACT_SCHEDULED entry's code in the
+  table and the JSON. Here the rule "call codes appear only in the customer's phone view" wins: the
+  ledger API returns `(hidden)` (same as `nodes/policy.py` explanations and the MCP tools).
+- **Caller verification is its own tab** (as the plan says); on E.py it sat next to the phone. The
+  acting-staff picker offers all four demo staff tokens (D.py's list; E.py offered two), default
+  `staff_19c` as on E.py.
+- **PII check exemptions.** `find_pii` flags runs of digits inside sha256 hashes (as a mobile number)
+  and inside agent.py's timestamped run ids (`20261116-204508-…` passes the card Luhn check). The API
+  leaves out hash-shaped values and `run_id` values in agent.py's exact format before the scan;
+  everything else in every response is checked. Tests cover both cases.
+- **A few extra read-only endpoints** for the screens: `GET /api/demo/meta` (demo time, hero, stages,
+  staff, checkable actions), `GET /api/demo/status`, `GET /api/demo/pipeline` (Home counts) and
+  `GET /api/ledger/customers`. Shared bits live in `api/common.py`. The explain-in-words endpoint
+  answers **503** with a readable message when the AI can't be reached (D.py showed a warning).
+- **Demo controls** are one shared component: a panel on Home and a folded `Collapsible` at the top of
+  Ledger / Policy (where the Streamlit sidebars were). "Check an action" sorts the action list
+  (D.py's order came from a Python set, which changes between runs).
+- **Routing** uses the URL hash (`#/ledger`), so `app.py` serves `web/dist` as plain files.
+- **Phones:** the Actions tabs use short labels below 768 px (GEL `useBreakpoint`), so nothing
+  scrolls sideways at 390 px.
+- **Node 22** was installed from the official nodejs.org tarball (checksum verified) instead of nvm;
+  any Node 22+ works.
+- **Tests:** `tests/test_tamper_demo.py` imports `scripts/tamper_demo.py`, which isn't in git on
+  `main` (it exists only in a local checkout), so it can't run on this branch; every other existing
+  test passes unchanged. `tests/test_api.py` is kept local like the other test files.
+
+## Test status (latest run on the branch)
+- `python -m pytest`: 376 passed (322 existing tests + 54 in `tests/test_api.py`)
+- `cd web && npm run build` and `npx tsc --noEmit`: pass
+- `npx playwright test`: 3 passed (the 10-step story with no-AI sweeps and the call code read from the
+  phone; insider edit caught + sweep stops; ledger filters)

@@ -51,7 +51,7 @@ export const titleCase = (code: string) =>
 export function PageTitle({ title, subtitle, children }: { title: string; subtitle: string; children?: ReactNode }) {
   return (
     <div className="mb-4">
-      <Heading size={3} tag="h1" brandHeading>
+      <Heading size={{ initial: 5, md: 3 }} tag="h1" brandHeading>
         {title}
       </Heading>
       <p className="mt-1 typography-body-9 text-text-heading">{subtitle}</p>

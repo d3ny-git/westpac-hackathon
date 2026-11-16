@@ -54,7 +54,7 @@ export function App() {
                   href={`#${p.path}`}
                   look={active ? 'primary' : 'faint'}
                   soft={!active}
-                  size="medium"
+                  size={{ initial: 'small', sm: 'medium' }}
                   aria-current={active ? 'page' : undefined}
                 >
                   {p.label}

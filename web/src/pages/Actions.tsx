@@ -6,6 +6,7 @@
 import { Alert } from '@westpac/ui/alert';
 import { Button } from '@westpac/ui/button';
 import { Field } from '@westpac/ui/field';
+import { useBreakpoint } from '@westpac/ui/hook';
 import { PadlockIcon } from '@westpac/ui/icon';
 import { Input } from '@westpac/ui/input';
 import { Panel, PanelBody } from '@westpac/ui/panel';
@@ -32,7 +33,15 @@ import { Caption, DataTable, ErrorAlert, Metric, Metrics, PageTitle, StatusBadge
 
 type Note = { look: 'success' | 'warning' | 'danger'; text: string } | null;
 
+/** Tab labels are short on phones, so the four GEL tabs fit without scrolling sideways. */
+function useTabTitle() {
+  const breakpoint = useBreakpoint();
+  const small = breakpoint === 'initial' || breakpoint === 'xsl';
+  return (short: string, full: string) => (small ? short : full);
+}
+
 export function ActionsPage() {
+  const tab = useTabTitle();
   const meta = useMeta();
   const queue = useApi<Queue>('/api/actions');
   const items = queue.data?.items ?? [];
@@ -89,13 +98,13 @@ export function ActionsPage() {
       </Metrics>
       <div className="mt-4">
         <Tabs aria-label="Actions">
-          <TabsPanel key="queue" title="Approval Queue">
+          <TabsPanel key="queue" title={tab("Queue", "Approval Queue")}>
             <div className="pt-3">
               {staffPicker}
               <ApprovalQueue items={items} staff={actingStaff} />
             </div>
           </TabsPanel>
-          <TabsPanel key="customer" title="Customer Experience">
+          <TabsPanel key="customer" title={tab("Phone", "Customer Experience")}>
             <div className="pt-3">
               {chosenCustomer ? (
                 <>
@@ -107,7 +116,7 @@ export function ActionsPage() {
               )}
             </div>
           </TabsPanel>
-          <TabsPanel key="verify" title="Caller verification">
+          <TabsPanel key="verify" title={tab("Caller", "Caller verification")}>
             <div className="pt-3">
               {chosenCustomer ? (
                 <>
@@ -122,7 +131,7 @@ export function ActionsPage() {
               )}
             </div>
           </TabsPanel>
-          <TabsPanel key="activity" title="Activity & Status">
+          <TabsPanel key="activity" title={tab("Activity", "Activity & Status")}>
             <div className="pt-3">
               <Activity items={items} />
             </div>
