@@ -1,6 +1,6 @@
 ---
 name: execute
-description: Node E carries out the recommendations a PERSON has approved, then checks the ledger again. (Needs Node E's tools; until they exist this stops with SETUP_ERROR.)
+description: Node E carries out the recommendations a PERSON has approved, then checks the ledger again.
 steps:
   - tool: ledger_verify_chain
     stop_if: "valid == false"

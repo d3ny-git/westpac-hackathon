@@ -29,7 +29,10 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | D-7 `agent.py`: runs a runbook with the AI, keeping it on script (only the listed tools, in order, with the runbook's arguments). **A and B can now write and run their runbooks** ([runbooks/README.md](runbooks/README.md)) | Done |
 | D-8 Runbooks: stop rules (e.g. stop if the ledger was tampered with), `--no-ai` mode (same steps, no AI: identical ledger), `policy_sweep.md`, `execute.md` (waits for E's tools) | Done |
 | D-9 Policy page: `streamlit run ui/pages/D.py` (check an action, deadlines, recommendations, decisions, explain with AI, run the policy sweep + replay runs) | Done |
-| **C and D board complete.** Waiting on A, B and E to plug in their tools and runbooks | — |
+| **C and D board complete.** | Done |
+| E-1/E-3 (Node E): approve/reject + ledger-connected dashboard `streamlit run ui/pages/E.py` | Done |
+| FLOW-1/2/3: E carries out approved actions (push, meeting + call code), stand-in for B's hardship form, E's MCP tools, `execute.md`, caller check on the E page. **The SPEC's full story runs C → D → E** | Done |
+| Next: FLOW-4 (one demo app + demo script), then A and B's real nodes | To do |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -142,6 +145,7 @@ python server.py --list          # list every MCP tool, grouped by node (works t
 python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)
 streamlit run ui/pages/C.py      # the ledger page (works today)
 streamlit run ui/pages/D.py      # the policy page (works today)
+streamlit run ui/pages/E.py      # the actions page (works today)
 python agent.py runbooks/ledger_check.md   # the AI runs a runbook (works today, needs .env)
 python agent.py runbooks/policy_sweep.md --no-ai   # the policy sweep without the AI (works today)
 python scripts/reset_demo.py     # generate -> sanitize -> run A and B workflows (--no-ai)
