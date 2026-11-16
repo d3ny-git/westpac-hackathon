@@ -32,7 +32,11 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | **C and D board complete.** | Done |
 | E-1/E-3 (Node E): approve/reject + ledger-connected dashboard `streamlit run ui/pages/E.py` | Done |
 | FLOW-1/2/3: E carries out approved actions (push, meeting + call code), stand-in for B's hardship form, E's MCP tools, `execute.md`, caller check on the E page. **The SPEC's full story runs C → D → E** | Done |
-| Next: FLOW-4 (one demo app + demo script), then A and B's real nodes | To do |
+| AB-1 Sanitizing: `python sanitize.py` turns raw data (fake PII) into clean data (tokens only); `tokenise`, `keep_columns`, `scrub_text` in `shared/pii_guard.py` | Done |
+| AB-2 Node A (`nodes/account.py`) and AB-3 Node B (`nodes/interaction.py`): scoring from clean data, B's promises, 4 MCP tools each. **The server now has all 5 nodes (21 tools)** | Done |
+| AB-4 A/B runbooks (`a_account.md`, `b_interaction.md`) + `python scripts/reset_demo.py`: the REAL pipeline, raw data → sanitize → A and B → ledger, with a PII self-check | Done |
+| AB-5 A and B pages: `streamlit run ui/pages/A.py` (raw → clean, run A's workflow, scores) and `ui/pages/B.py` (**B's mock input form**: kept vs thrown away → B's workflow → promises) | Done |
+| **A, B, C, D and E are all built; the SPEC's full story runs on the real pipeline.** Next: FLOW-4 (GEL React UI) on branch `ui/gel-react` | In progress |
 | Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
 
 ## The pipeline
@@ -140,9 +144,13 @@ pip install -r requirements.txt
 #   OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
 python -m shared.llm             # check your OpenRouter key + model work (works today)
 python -m pytest                 # run the tests (works today)
-python scripts/load_fixtures.py  # load demo data into the ledger, data/guardian.db (works today)
+python scripts/reset_demo.py     # start a demo: raw data -> sanitize -> A and B -> ledger (works today)
+python scripts/reset_demo.py --empty   # or start with an empty ledger and run A and B live on their pages
+python scripts/load_fixtures.py  # or: load mock demo data straight into the ledger (--stage full = end state)
 python server.py --list          # list every MCP tool, grouped by node (works today)
 python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)
+streamlit run ui/pages/A.py      # the account page (works today)
+streamlit run ui/pages/B.py      # the interactions page + mock input form (works today)
 streamlit run ui/pages/C.py      # the ledger page (works today)
 streamlit run ui/pages/D.py      # the policy page (works today)
 streamlit run ui/pages/E.py      # the actions page (works today)

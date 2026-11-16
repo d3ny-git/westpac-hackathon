@@ -42,7 +42,8 @@ from shared import llm
 from shared.pii_guard import PIIError
 
 REPO = Path(__file__).resolve().parent
-RUNS_DIR = REPO / "data" / "runs"           # gitignored
+# Run logs (gitignored). GUARDIAN_RUNS_DIR overrides the folder, e.g. so tests never write to data/runs.
+RUNS_DIR = Path(os.getenv("GUARDIAN_RUNS_DIR") or REPO / "data" / "runs")
 
 
 # ---------------------------------------------------------------------------

@@ -8,8 +8,10 @@ Anyone can change a value here. Every node sees the change, so give the team a h
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Time
@@ -222,6 +224,20 @@ class QuietHelpOption(str, Enum):
     PAUSE_REPAYMENTS = "PAUSE_REPAYMENTS"
     REDUCE_REPAYMENTS = "REDUCE_REPAYMENTS"
     BOOK_CALL = "BOOK_CALL"
+
+
+# ---------------------------------------------------------------------------
+# Clean data files (written by sanitize.py, read by Nodes A and B; never raw data)
+# ---------------------------------------------------------------------------
+# GUARDIAN_CLEAN_DIR overrides the folder (tests use a temporary one).
+CLEAN_DIR_DEFAULT = Path(__file__).resolve().parents[1] / "data" / "clean"
+CLEAN_TRANSACTIONS_FILE = "transactions.csv"
+CLEAN_INTERACTIONS_FILE = "interactions.csv"
+
+
+def clean_dir() -> Path:
+    """Where the clean CSVs live: GUARDIAN_CLEAN_DIR, or data/clean by default."""
+    return Path(os.getenv("GUARDIAN_CLEAN_DIR") or CLEAN_DIR_DEFAULT)
 
 
 # ---------------------------------------------------------------------------
