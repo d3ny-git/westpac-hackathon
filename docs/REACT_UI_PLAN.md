@@ -147,18 +147,18 @@ Every feature of the three Streamlit pages, and where it lives in the React UI.
 - [x] 5. Full ledger: show one entry in full (JSON)
 
 ### `ui/pages/D.py` → Policy (D)
-- [ ] Demo controls: load a story stage
-- [ ] Demo controls: hero submits the hardship form (stand-in for B5), disabled once it's in the ledger, with its status line
-- [ ] 1. Check an action: customer, action (collections, credit offers, VERIFY_CALLER), requested by, call code → ALLOW / BLOCK box with policy, flags and reason, and the entry it was recorded as
-- [ ] 1. Check an action: a readable warning when the check can't run (e.g. VERIFY_CALLER with no code)
-- [ ] 2. Deadlines (P1): level, customer, promise, due, hours to due, reason; "none" message
-- [ ] 3. Recommendations: rec, customer, recommendation, why, status, decided by, made
-- [ ] 4. Decisions: newest first, entry, time, customer, action, ALLOW / BLOCK (policy), reason
-- [ ] 5. Explain: pick a decision or recommendation (jumps to the one just checked), rule, combined score, open case, overdue promises, calls booked
-- [ ] 5. Explain: "Explain in plain English (AI)" with a readable message when the AI can't be reached
-- [ ] 5. Explain: all facts and evidence (call codes hidden)
-- [ ] 6. Policy sweep: run with the AI / without the AI
-- [ ] 6. Policy sweep: run log picker (newest / the run just made), status, each step's output, OFF SCRIPT and stopped events, summary, error
+- [x] Demo controls: load a story stage
+- [x] Demo controls: hero submits the hardship form (stand-in for B5), disabled once it's in the ledger, with its status line
+- [x] 1. Check an action: customer, action (collections, credit offers, VERIFY_CALLER), requested by, call code → ALLOW / BLOCK box with policy, flags and reason, and the entry it was recorded as
+- [x] 1. Check an action: a readable warning when the check can't run (e.g. VERIFY_CALLER with no code)
+- [x] 2. Deadlines (P1): level, customer, promise, due, hours to due, reason; "none" message
+- [x] 3. Recommendations: rec, customer, recommendation, why, status, decided by, made
+- [x] 4. Decisions: newest first, entry, time, customer, action, ALLOW / BLOCK (policy), reason
+- [x] 5. Explain: pick a decision or recommendation (jumps to the one just checked), rule, combined score, open case, overdue promises, calls booked
+- [x] 5. Explain: "Explain in plain English (AI)" with a readable message when the AI can't be reached
+- [x] 5. Explain: all facts and evidence (call codes hidden)
+- [x] 6. Policy sweep: run with the AI / without the AI
+- [x] 6. Policy sweep: run log picker (newest / the run just made), status, each step's output, OFF SCRIPT and stopped events, summary, error
 
 ### `ui/pages/E.py` → Actions (E)
 - [ ] Metrics: pending, approved, completed, total
