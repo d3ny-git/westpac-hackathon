@@ -146,3 +146,19 @@ def verify_chain(db_path: Optional[Path | str] = None) -> ChainReport:
             "SELECT seq, entry_id, customer_token, entry_type, data, created_at, prev_hash, hash "
             "FROM ledger ORDER BY seq").fetchall()
     return check_entries(rows)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoints: closing the "newest entries deleted" gap
+# ---------------------------------------------------------------------------
+def checkpoint_holds(entry_id: str, head_hash: str, db_path: Optional[Path | str] = None) -> bool:
+    """True if the ledger still contains `entry_id` with exactly the hash recorded at a checkpoint.
+
+    Write down (last_entry_id, head_hash) from verify_chain() at some moment. Later, if the chain
+    is valid AND this returns True, every entry up to that checkpoint is exactly as it was,
+    because each hash depends on everything before it. If it returns False, the newest entries
+    were removed or the chain was rebuilt after an edit.
+    """
+    from nodes.ledger.store import get   # imported here: store.py also imports this file
+    entry = get(entry_id, db_path=db_path)
+    return entry is not None and entry.hash == head_hash

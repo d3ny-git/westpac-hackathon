@@ -17,4 +17,5 @@ venv/
 # Generated data (rebuilt by scripts/reset_demo.py)
 data/clean/
 data/guardian.db
+data/*_checkpoint.json
 data/runs/

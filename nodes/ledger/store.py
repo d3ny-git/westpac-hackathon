@@ -90,6 +90,11 @@ def _db_path(db_path: Optional[Path | str]) -> Path:
     return Path(os.getenv("GUARDIAN_DB", DEFAULT_DB))
 
 
+def db_file(db_path: Optional[Path | str] = None) -> Path:
+    """Which database file the ledger is using (GUARDIAN_DB, or data/guardian.db by default)."""
+    return _db_path(db_path)
+
+
 def connect(db_path: Optional[Path | str] = None) -> sqlite3.Connection:
     """Open the ledger database, creating the file and tables if they don't exist yet."""
     path = _db_path(db_path)
