@@ -38,6 +38,12 @@ def main() -> None:
 
     if not (WEB_DIST / "index.html").is_file():
         print("Note: web/dist isn't built yet, so only the API works. Run: cd web && npm ci && npm run build")
+    missing = [k for k in ("OPENROUTER_API_KEY", "OPENROUTER_MODEL") if not os.getenv(k)]
+    if missing:
+        print(f"Note: the AI buttons won't work: {', '.join(missing)} not set. Put them in {REPO / '.env'} "
+              "(copy .env.example) and restart. Everything else works without the AI.")
+    else:
+        print(f"AI: ready ({os.getenv('OPENROUTER_MODEL')} via OpenRouter)")
     print(f"Customer Guardian on http://{HOST}:{args.port}  (ledger: {store.db_file()})", flush=True)
     uvicorn.run(app, host=HOST, port=args.port, log_level="warning")
 

@@ -9,8 +9,14 @@ Setup and start (see `web/README.md`):
 ```bash
 pip install -r requirements.txt -r requirements-web.txt
 cd web && npm ci && npm run build && cd ..
+cp .env.example .env              # then add OPENROUTER_API_KEY and OPENROUTER_MODEL (for the AI buttons)
 python app.py                     # http://127.0.0.1:8600
 ```
+
+The AI buttons (Run with the AI, the AI sweep, Explain in plain English) read `.env` **in the folder
+`app.py` runs from**. `.env` is never committed, so a fresh clone or a separate git worktree of this
+branch needs its own `.env` (or a link to an existing one: `ln -s /path/to/main/checkout/.env .env`).
+`python app.py` says at startup whether the AI is ready. Everything else works without it.
 
 Want to keep the demo data untouched? Start it with
 `GUARDIAN_DB=/tmp/g.db GUARDIAN_CLEAN_DIR=/tmp/g-clean GUARDIAN_RUNS_DIR=/tmp/g-runs python app.py`.
