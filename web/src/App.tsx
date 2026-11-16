@@ -3,13 +3,17 @@ import { Footer } from '@westpac/ui/footer';
 import { Header } from '@westpac/ui/header';
 import { useEffect, useState } from 'react';
 
+import { AccountPage } from './pages/Account';
 import { ActionsPage } from './pages/Actions';
 import { HomePage } from './pages/Home';
+import { InteractionsPage } from './pages/Interactions';
 import { LedgerPage } from './pages/Ledger';
 import { PolicyPage } from './pages/Policy';
 
 export const PAGES = [
   { path: '/', label: 'Home', Page: HomePage },
+  { path: '/account', label: 'Account (A)', Page: AccountPage },
+  { path: '/interactions', label: 'Interactions (B)', Page: InteractionsPage },
   { path: '/ledger', label: 'Ledger (C)', Page: LedgerPage },
   { path: '/policy', label: 'Policy (D)', Page: PolicyPage },
   { path: '/actions', label: 'Actions (E)', Page: ActionsPage },

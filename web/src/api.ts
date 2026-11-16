@@ -7,7 +7,104 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 // Types (same shapes as the API's JSON)
 // ---------------------------------------------------------------------------
 export type Meta = { now: string; hero: string; stages: string[]; staff: string[]; checkable: string[] };
-export type DemoStatus = { count: number; hero_form_submitted: boolean };
+export type DemoStatus = { count: number; hero_form_submitted: boolean; clean_ready: boolean };
+export type ResetReport = { transactions: number; customers: number; promises: number; entries: number; empty: boolean };
+
+/** A workflow run (agent.RunResult) as the API returns it. */
+export type RunStep = { n: number; tool: string; args: Record<string, unknown>; ok: boolean; output: unknown };
+export type RunResult = {
+  run_id: string;
+  runbook: string;
+  mode: string;
+  status: string;
+  summary: string;
+  error: string | null;
+  steps: RunStep[];
+};
+
+// Account (A)
+export type AccountOverview = {
+  clean_ready: boolean;
+  raw_file: string | null;
+  columns: { column: string; status: 'kept' | 'customer_token' | 'dropped' }[];
+  check: {
+    rows: number | null;
+    customers: number | null;
+    columns_ok: boolean;
+    first_date?: string | null;
+    last_date?: string | null;
+  } | null;
+};
+export type RawSample = {
+  people: { customer_id: string; full_name: string }[];
+  customer_id: string;
+  raw: Record<string, string>;
+  clean: Record<string, string>;
+};
+export type AccountScore = {
+  customer_token: string;
+  score: number;
+  band: string;
+  reasons: string[];
+  signals: Record<string, number | boolean>;
+  in_ledger: boolean;
+};
+export type AccountRule = { reason: string; points: number; rule: string };
+export type AccountEntry = { entry_id: string; customer_token: string; score: number; band: string; reasons: string[] };
+
+// Interactions (B)
+export type InteractionOverview = {
+  clean_ready: boolean;
+  clean_rows: Record<string, string>[];
+  entries: { entry_id: string; customer_token: string; entry_type: string; what: string }[];
+};
+export type RawSubmission = {
+  customer_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  staff_id: string;
+  staff_name: string;
+  date: string;
+  channel: string;
+  type: string;
+  form_status: string;
+  callback_due: string;
+  text: string;
+};
+export type FormOptions = {
+  customers: { customer_id: string; full_name: string; email: string; phone: string }[];
+  staff: { staff_id: string; staff_name: string }[];
+  examples: RawSubmission[];
+  channels: string[];
+  types: string[];
+  form_statuses: string[];
+  defaults: { date: string; callback_day: string; callback_time: string };
+};
+export type CustomerPromise = {
+  promise_id: string | null;
+  promise_type: string;
+  due: string;
+  made_by: string;
+  description: string;
+};
+export type CustomerNow = {
+  customer_token: string;
+  score: CombinedScore | null;
+  open_case: boolean;
+  promises: CustomerPromise[];
+};
+export type SubmitResult = {
+  clean: Record<string, string>;
+  thrown_away: Record<string, string>;
+  flags: string;
+  run: RunResult;
+  customer: CustomerNow;
+};
+export type RunAllResult = {
+  customers: number;
+  rows: { customer_token: string; status: string; score: string; score_written: boolean; promises_written: string[] }[];
+};
 
 export type ChainReport = {
   valid: boolean;
@@ -162,8 +259,8 @@ export type Story = {
   complete: boolean;
 };
 export type Pipeline = {
-  A: { account_scores: number };
-  B: { interaction_scores: number; promises: number };
+  A: { clean_transactions: number | null; account_scores: number };
+  B: { clean_interactions: number | null; interaction_scores: number; promises: number };
   C: { entries: number; valid: boolean; customers: number; open_promises: number; quiet_help: number };
   D: { recommendations: number; deadline_alerts: number; allowed: number; blocked: number };
   E: { awaiting_approval: number; approved: number; done: number; rejected: number; messages_sent: number };

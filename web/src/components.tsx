@@ -1,4 +1,5 @@
 // Small building blocks shared by the pages, all made of GEL components and GEL tokens.
+import { Accordion, AccordionItem } from '@westpac/ui/accordion';
 import { Alert } from '@westpac/ui/alert';
 import { Badge } from '@westpac/ui/badge';
 import { Heading } from '@westpac/ui/heading';
@@ -13,7 +14,7 @@ import {
 } from '@westpac/ui/table';
 import { ReactNode } from 'react';
 
-import { errorText } from './api';
+import { RunResult, errorText } from './api';
 
 // ---------------------------------------------------------------------------
 // Formatting (times are the demo's fixed clock, shown as stored: no time zones)
@@ -232,3 +233,47 @@ export const DecisionBadge = ({ decision, policy }: { decision: string; policy: 
   ) : (
     <CodeBadge color="danger">BLOCK{policy ? ` (${policy})` : ''}</CodeBadge>
   );
+
+// ---------------------------------------------------------------------------
+// A workflow run (A's and B's runbooks): status, each step's output, the summary
+// ---------------------------------------------------------------------------
+export function RunView({ run, title, testId }: { run: RunResult; title?: string; testId?: string }) {
+  return (
+    <div data-testid={testId}>
+      <Alert look={run.status === 'COMPLETED' ? 'success' : 'danger'} heading={run.status}>
+        {title ?? run.runbook} ({run.mode})
+        {run.error && <span className="block">{run.error}</span>}
+      </Alert>
+      {run.steps.length > 0 && (
+        <Accordion key={run.run_id} className="mt-2">
+          {run.steps.map(s => (
+            <AccordionItem key={`s${s.n}`} id={`s${s.n}`} title={`${s.ok ? '✔' : '✘'} Step ${s.n}: ${s.tool}`}>
+              <JsonView value={s.output} label={`Output of step ${s.n}`} />
+            </AccordionItem>
+          ))}
+        </Accordion>
+      )}
+      {run.summary && (
+        <Alert look="info" className="mt-2">
+          <span className="whitespace-pre-line">{run.summary}</span>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+/** A record as a two-column Field / Value table (like st.dataframe(row.items())). */
+export function FieldTable({ row, caption, testId }: { row: Record<string, unknown>; caption: string; testId?: string }) {
+  return (
+    <DataTable
+      testId={testId}
+      caption={caption}
+      rows={Object.entries(row)}
+      rowKey={([k]) => k}
+      columns={[
+        { header: 'Field', cell: ([k]) => k, className: 'whitespace-nowrap' },
+        { header: 'Value', cell: ([, v]) => <span className="break-all">{String(v ?? '')}</span> },
+      ]}
+    />
+  );
+}
