@@ -4,7 +4,7 @@
 |---|---|---|
 | A Account | `nodes/account.py` | Owner-A |
 | B Interactions | `nodes/interaction.py` | Owner-B |
-| C Ledger | `nodes/ledger/` (done: `store.py`, `chain.py`, `tools.py`) | Owner-CD |
+| C Ledger | `nodes/ledger/` (done: `store.py`, `chain.py`, `quiet_help.py`, `dashboard.py`, `tools.py`) | Owner-CD |
 | D Policy | `nodes/policy.py` | Owner-CD |
 | E Actions | `nodes/actions.py` | Owner-E |
 
