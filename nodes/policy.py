@@ -13,6 +13,9 @@ D has two jobs:
   4. Explainer, explain(entry_id): gathers the facts behind a recorded decision or recommendation,
      so a person (or the AI, via shared.llm.explain) can say WHY in plain English.
 
+MCP tools (D-6, see register() at the bottom): policy_check_action, policy_deadlines,
+policy_recommend, policy_explain.
+
 The rules are plain Python, not AI: the same ledger and the same request always give the same answer.
 
 Policies:
@@ -48,8 +51,9 @@ from nodes.ledger.quiet_help import (CombinedScore, combine, combined_score, ope
 from shared.config import (QUIET_HELP_COOLDOWN, COLLECTIONS_ACTIONS, CREDIT_OFFER_ACTIONS, HARDSHIP_RESPONSE_DAYS, HIGH_OR_ABOVE,
                            P1_ALERT_WINDOW, RECOMMENDATION_COOLDOWN, ActionType, DeadlineLevel, DecisionResult,
                            EntryType, PolicyId, PromiseType, RecommendationType, band, now)
-from shared.schemas import (ActionRequest, ContactScheduled, DeadlineAlert, Decision, LedgerEntry, Promise,
-                            Recommendation)
+from shared.pii_guard import safe_tool
+from shared.schemas import (ActionRequest, Actor, ContactScheduled, CustomerToken, DeadlineAlert, Decision,
+                            EntryId, LedgerEntry, Promise, Recommendation)
 
 DbPath = Optional[Path | str]
 
@@ -466,3 +470,64 @@ def explain_in_words(entry_id: str, *, db_path: DbPath = None) -> str:
     from shared.llm import explain as llm_explain       # imported here so the policies never need the AI
     facts = explain(entry_id, db_path=db_path).model_dump()
     return llm_explain(facts, "Explain to a bank staff member why this decision or recommendation was made.")
+
+
+# ---------------------------------------------------------------------------
+# MCP tools (D-6): what the AI is allowed to ask Node D
+# ---------------------------------------------------------------------------
+def register(mcp) -> None:
+    """Called once by server.py to add Node D's tools to the MCP server.
+
+    None of these tools can approve or carry out anything. Recommendations wait for a person in
+    Node E, and decisions only say ALLOW or BLOCK.
+    """
+
+    @mcp.tool()
+    @safe_tool
+    def policy_check_action(customer_token: CustomerToken, action: ActionType, requested_by: Actor,
+                            call_code: Optional[str] = None) -> dict:
+        """Ask whether an action is allowed for a customer, BEFORE anyone does it.
+
+        Returns decision (ALLOW or BLOCK), policy (P2, P3 or P4 when blocked), a plain-English
+        reason, and flags (e.g. POSSIBLE_SCAM). The decision is recorded in the ledger.
+        Policies: P2 no collections/default notice during an open hardship case; P3 a caller
+        claiming to be Westpac must quote the booked call code (pass it as call_code with
+        action VERIFY_CALLER); P4 no credit offers to HIGH or CRITICAL customers.
+        requested_by is the staff token asking (e.g. staff_44a) or SYSTEM.
+        """
+        return check_action({"customer_token": customer_token, "action": action,
+                             "requested_by": requested_by, "call_code": call_code})
+
+    @mcp.tool()
+    @safe_tool
+    def policy_deadlines() -> list[dict]:
+        """Policy P1: every open promise that is overdue (ESCALATE) or due within 24 hours (ALERT).
+
+        Each item has customer_token, promise_id, promise_type, due, level, hours_to_due
+        (negative = overdue) and a plain-English reason. Escalations first. Read-only.
+        """
+        return check_deadlines()
+
+    @mcp.tool()
+    @safe_tool
+    def policy_recommend() -> list[dict]:
+        """Create NEW recommendations from the ledger and return them (an empty list if there's nothing new).
+
+        ESCALATE for overdue promises, BOOK_MEETING for an open hardship case with no meeting,
+        QUIET_HELP_PUSH for customers on the Quiet Help list. Each is recorded as
+        AWAITING_APPROVAL: nothing happens until a PERSON approves it. Never repeats a
+        recommendation that is still waiting or was made in the last 30 days.
+        """
+        return recommend()
+
+    @mcp.tool()
+    @safe_tool
+    def policy_explain(entry_id: EntryId) -> dict:
+        """The facts behind one recorded decision or recommendation, e.g. entry_id "E-0041".
+
+        Returns the outcome, the rule in fixed words, the customer's situation at that moment
+        (scores, open hardship case, overdue promises...) and the ledger entries it relied on.
+        Use these facts to explain the decision; don't add anything that isn't in them.
+        Call codes are always hidden.
+        """
+        return explain(entry_id)
