@@ -67,6 +67,14 @@ with st.sidebar:
         st.session_state.pop("a_run", None)
         st.toast("Demo reset: A and B have scored everyone")
         st.rerun()
+    if st.button("🧹 Start empty (A and B not run yet)", width="stretch", key="reset_empty",
+                 help="Sanitize the raw data and start a fresh ledger, but don't run A or B: "
+                      "run them yourself on the A and B pages"):
+        reset_demo.reset(quiet=True, empty=True)
+        st.session_state.pop("a_run", None)
+        st.toast("Fresh ledger: now run Node A, then Node B")
+        st.rerun()
+    st.caption("Start empty, then: A page → Run Node A's workflow; B page → Run Node B for all customers.")
 
 raw_path = sanitize.RAW_DIR / sanitize.RAW_TRANSACTIONS
 if not account.clean_file().exists():

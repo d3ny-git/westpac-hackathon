@@ -145,6 +145,7 @@ pip install -r requirements.txt
 python -m shared.llm             # check your OpenRouter key + model work (works today)
 python -m pytest                 # run the tests (works today)
 python scripts/reset_demo.py     # start a demo: raw data -> sanitize -> A and B -> ledger (works today)
+python scripts/reset_demo.py --empty   # or start with an empty ledger and run A and B live on their pages
 python scripts/load_fixtures.py  # or: load mock demo data straight into the ledger (--stage full = end state)
 python server.py --list          # list every MCP tool, grouped by node (works today)
 python scripts/try_tool.py       # call a tool by hand, as the AI would (works today)

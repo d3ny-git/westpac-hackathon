@@ -2,6 +2,7 @@
 
     python scripts/reset_demo.py          # runbooks without the AI (fast, no key needed)
     python scripts/reset_demo.py --ai     # A's and B's runbooks run with the AI (slower)
+    python scripts/reset_demo.py --empty  # steps 1, 2 and 5 only: run A and B yourself on their pages
 
 Steps (docs/MCP_PLAN.md, E5):
   1. sanitize      data/raw/*.csv (fake PII)  ->  data/clean/*.csv (tokens only)
@@ -74,8 +75,23 @@ def _run(runbook: str, server, ai: bool, variables=None) -> agent.RunResult:
     return result
 
 
-def reset(*, ai: bool = False, raw_dir: Path = sanitize.RAW_DIR, quiet: bool = False) -> dict:
-    """Run the whole reset. Returns a small report; raises ResetError if any step fails."""
+def run_node_a(server, ai: bool = False) -> agent.RunResult:
+    """Node A's workflow (runbooks/a_account.md) for every customer."""
+    return _run("a_account.md", server, ai)
+
+
+def run_node_b_for_everyone(server, ai: bool = False) -> list[agent.RunResult]:
+    """Node B's workflow (runbooks/b_interaction.md) once per customer in the clean interactions,
+    in token order. Used by the reset and by the B page's "Run Node B for all customers" button."""
+    tokens = sorted({r["customer_token"] for r in sanitize.read_csv(clean_dir() / CLEAN_INTERACTIONS_FILE)})
+    return [_run("b_interaction.md", server, ai, {"token": token}) for token in tokens]
+
+
+def reset(*, ai: bool = False, raw_dir: Path = sanitize.RAW_DIR, quiet: bool = False, empty: bool = False) -> dict:
+    """Run the whole reset. Returns a small report; raises ResetError if any step fails.
+
+    empty=True stops after the fresh ledger: the clean data is ready, but Nodes A and B haven't
+    run yet, so the ledger holds only the one older event. Run A and B on their pages to fill it."""
     say = (lambda *a: None) if quiet else print
     started = datetime.now()                                   # only to find this reset's run logs
 
@@ -93,15 +109,17 @@ def reset(*, ai: bool = False, raw_dir: Path = sanitize.RAW_DIR, quiet: bool = F
     say("2. Fresh ledger (plus recent_push's Quiet Help push from 12 days ago)")
 
     # 3 + 4. Nodes A and B, through their runbooks, on one in-process MCP server.
-    server, _ = build_server()
-    a = _run("a_account.md", server, ai)
-    say(f"3. Node A ({'AI' if ai else 'no AI'}): {a.steps[2].output['written']} account scores written")
-    tokens = sorted({r["customer_token"] for r in sanitize.read_csv(clean_dir() / CLEAN_INTERACTIONS_FILE)})
-    promises = 0
-    for token in tokens:
-        b = _run("b_interaction.md", server, ai, {"token": token})
-        promises += len(b.steps[2].output["promises_written"])
-    say(f"4. Node B ({'AI' if ai else 'no AI'}): {len(tokens)} customers, {promises} promises written")
+    customers = promises = 0
+    if empty:
+        say("3-4. Skipped (--empty): run Node A and Node B on their pages to fill the ledger")
+    else:
+        server, _ = build_server()
+        a = run_node_a(server, ai)
+        say(f"3. Node A ({'AI' if ai else 'no AI'}): {a.steps[2].output['written']} account scores written")
+        runs = run_node_b_for_everyone(server, ai)
+        customers = len(runs)
+        promises = sum(len(r.steps[2].output["promises_written"]) for r in runs)
+        say(f"4. Node B ({'AI' if ai else 'no AI'}): {customers} customers, {promises} promises written")
 
     # 5. PII check across everything this reset produced.
     places = [p.read_text() for p in clean_dir().glob("*.csv")]
@@ -112,7 +130,7 @@ def reset(*, ai: bool = False, raw_dir: Path = sanitize.RAW_DIR, quiet: bool = F
     if leaks:
         raise ResetError(f"PII check FAILED: {leaks} personal value(s) from data/raw found in the output")
     say("5. PII check: 0 personal values from data/raw in data/clean, the ledger or the run logs")
-    return {"transactions": counts[sanitize.CLEAN_TRANSACTIONS], "customers": len(tokens),
+    return {"transactions": counts[sanitize.CLEAN_TRANSACTIONS], "customers": customers,
             "promises": promises, "entries": store.count()}
 
 
@@ -120,14 +138,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Reset the demo with the real A and B pipeline.")
     parser.add_argument("--ai", action="store_true", help="run A's and B's runbooks with the AI (needs .env)")
     parser.add_argument("--raw", default=str(sanitize.RAW_DIR), help="folder with the raw CSVs (default: data/raw)")
+    parser.add_argument("--empty", action="store_true",
+                        help="sanitize and start a fresh ledger, but don't run A or B (do that on their pages)")
     args = parser.parse_args()
     try:
-        reset(ai=args.ai, raw_dir=Path(args.raw))
+        reset(ai=args.ai, raw_dir=Path(args.raw), empty=args.empty)
     except ResetError as exc:
         print(f"RESET FAILED: {exc}")
         return 1
     print()
-    print(load_fixtures.summary())
+    if args.empty:
+        print(f"Ledger: {store.count()} entry. Next: Run Node A's workflow on the A page, then "
+              f"Run Node B for all customers on the B page.")
+    else:
+        print(load_fixtures.summary())
     return 0
 
 
