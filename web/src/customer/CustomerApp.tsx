@@ -1,7 +1,7 @@
 // The customer app (/customer/): what a Westpac customer sees in their app. Phone-first.
 //   Sign in (demo) · Home (accounts, recent transactions) · Messages (Quiet Help offers that work,
-//   a booked call's call code) · Get help (hardship form, call-back request) · Our promises to you ·
-//   Is this call really Westpac?
+//   gentle money tips for customers who haven't reached out, a booked call's call code) · Get help
+//   (hardship form, call-back request) · Our promises to you · Is this call really Westpac?
 // The customer never sees scores, bands, flags, tokens or policy names: the API doesn't send them.
 import { Alert } from '@westpac/ui/alert';
 import { Badge } from '@westpac/ui/badge';
@@ -44,6 +44,13 @@ const OPTION_WORDS: Record<string, string> = {
   REDUCE_REPAYMENTS: 'Reduce your repayments',
   BOOK_CALL: 'Talk to someone who can help',
 };
+// A gentle tip (the customer hasn't reached out): generic, friendly, and nothing that implies they're struggling.
+const MONEY_TIPS = [
+  'Set up bill reminders so nothing sneaks up on you.',
+  'Check your spending by category each month to see where your money goes.',
+  'Put a little aside each payday, even a small amount, for the unexpected.',
+  'Turn on balance alerts so you know before your account runs low.',
+];
 
 export function CustomerApp() {
   const [customerId, setCustomerId] = useRemembered('guardian.customer');
@@ -74,7 +81,7 @@ export function CustomerApp() {
           <>
             <Tabs route={route} customerId={customerId} />
             {route === '/home' && <Home customerId={customerId} />}
-            {route === '/messages' && <Messages customerId={customerId} openHelp={openHelp} />}
+            {route === '/messages' && <Messages customerId={customerId} openHelp={openHelp} openGetHelp={() => go('/help')} />}
             {route === '/help' && <GetHelp customerId={customerId} mode={helpMode} setMode={setHelpMode} />}
             {route === '/promises' && <Promises customerId={customerId} />}
             {route === '/verify' && <VerifyCall customerId={customerId} />}
@@ -216,7 +223,15 @@ function Home({ customerId }: { customerId: string }) {
 // ---------------------------------------------------------------------------
 // Messages: the inbox
 // ---------------------------------------------------------------------------
-function Messages({ customerId, openHelp }: { customerId: string; openHelp: (mode: 'form' | 'callback') => void }) {
+function Messages({
+  customerId,
+  openHelp,
+  openGetHelp,
+}: {
+  customerId: string;
+  openHelp: (mode: 'form' | 'callback') => void;
+  openGetHelp: () => void;
+}) {
   const inbox = useApi<CustomerMessage[]>(`/api/customer/messages?customer_id=${customerId}`);
   const messages = inbox.data ?? [];
   const markSeen = useAction((ids: string[]) => post('/api/customer/messages/seen', { customer_id: customerId, ids }));
@@ -224,6 +239,14 @@ function Messages({ customerId, openHelp }: { customerId: string; openHelp: (mod
   const fresh = useRef(new Set<string>());
   const [, redraw] = useState(0);
   const [showEarlier, setShowEarlier] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState<string | null>(null); // the tip whose money tips are showing
+  const notNow = (id: string) => {
+    // "Not now": the message is seen (no New label, no badge), and that's all.
+    fresh.current.delete(id);
+    setTipsOpen(null);
+    redraw(n => n + 1);
+    markSeen.mutate([id]);
+  };
 
   useEffect(() => {
     const unseen = messages.filter(m => !m.seen && !fresh.current.has(m.id)).map(m => m.id);
@@ -252,55 +275,67 @@ function Messages({ customerId, openHelp }: { customerId: string; openHelp: (mod
           {current[0].lock_screen}
         </Alert>
       )}
-      {current.map(m => (
-        <Card key={m.id} testId={`message-${m.kind}`}>
-          <p className="flex items-center gap-1 typography-body-9 font-bold text-text-heading">
-            {m.in_app_title}
-            {fresh.current.has(m.id) && (
-              <Badge color="danger" type="pill" tag="span" data-testid="message-new">
-                New
-              </Badge>
-            )}
-          </p>
-          <p className="mt-1 typography-body-10 text-text-body">{m.in_app_body}</p>
-          {m.kind === 'QUIET_HELP' ? (
-            <>
-              <ul className="mt-2 list-disc pl-3 typography-body-10 text-text-body">
-                {(m.options ?? []).map(o => (
-                  <li key={o}>{OPTION_WORDS[o] ?? o}</li>
-                ))}
-              </ul>
-              <div className="mt-2 flex flex-col gap-1">
-                <Button look="primary" block onClick={() => openHelp('form')}>
-                  Apply for hardship help
-                </Button>
-                <Button look="faint" soft block onClick={() => openHelp('callback')}>
-                  Talk to someone
-                </Button>
+      {current.map(m =>
+        m.kind === 'QUIET_HELP' && m.variant === 'TIP' ? (
+          <TipCard
+            key={m.id}
+            message={m}
+            isNew={fresh.current.has(m.id)}
+            tipsOpen={tipsOpen === m.id}
+            onSeeTips={() => setTipsOpen(m.id)}
+            onNotNow={() => notNow(m.id)}
+            openGetHelp={openGetHelp}
+          />
+        ) : (
+          <Card key={m.id} testId={`message-${m.kind}`}>
+            <p className="flex items-center gap-1 typography-body-9 font-bold text-text-heading">
+              {m.in_app_title}
+              {fresh.current.has(m.id) && (
+                <Badge color="danger" type="pill" tag="span" data-testid="message-new">
+                  New
+                </Badge>
+              )}
+            </p>
+            <p className="mt-1 typography-body-10 text-text-body">{m.in_app_body}</p>
+            {m.kind === 'QUIET_HELP' ? (
+              <>
+                <ul className="mt-2 list-disc pl-3 typography-body-10 text-text-body">
+                  {(m.options ?? []).map(o => (
+                    <li key={o}>{OPTION_WORDS[o] ?? o}</li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex flex-col gap-1">
+                  <Button look="primary" block onClick={() => openHelp('form')}>
+                    Apply for hardship help
+                  </Button>
+                  <Button look="faint" soft block onClick={() => openHelp('callback')}>
+                    Talk to someone
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="mt-2">
+                <p className="typography-body-10">Your call is booked for {friendly(m.meeting_time)}.</p>
+                <p className="mt-2 mb-1 flex items-center gap-1 typography-body-10 font-bold text-text-heading">
+                  <PadlockIcon size="small" color="hero" /> Your call code
+                </p>
+                <PassCode
+                  length={(m.call_code ?? '').length || 6}
+                  type="alphanumeric"
+                  value={(m.call_code ?? '').split('')}
+                  onChange={() => undefined}
+                />
+                <VisuallyHidden>
+                  Your call code is <span data-testid="call-code">{m.call_code}</span>
+                </VisuallyHidden>
+                <p className="mt-2 typography-body-10 text-text-muted">
+                  We'll say this code when we call. If a caller can't, hang up.
+                </p>
               </div>
-            </>
-          ) : (
-            <div className="mt-2">
-              <p className="typography-body-10">Your call is booked for {friendly(m.meeting_time)}.</p>
-              <p className="mt-2 mb-1 flex items-center gap-1 typography-body-10 font-bold text-text-heading">
-                <PadlockIcon size="small" color="hero" /> Your call code
-              </p>
-              <PassCode
-                length={(m.call_code ?? '').length || 6}
-                type="alphanumeric"
-                value={(m.call_code ?? '').split('')}
-                onChange={() => undefined}
-              />
-              <VisuallyHidden>
-                Your call code is <span data-testid="call-code">{m.call_code}</span>
-              </VisuallyHidden>
-              <p className="mt-2 typography-body-10 text-text-muted">
-                We'll say this code when we call. If a caller can't, hang up.
-              </p>
-            </div>
-          )}
-        </Card>
-      ))}
+            )}
+          </Card>
+        ),
+      )}
       {earlier.length > 0 && (
         <div className="mt-3" data-testid="earlier-messages">
           <Button look="faint" soft size="small" onClick={() => setShowEarlier(v => !v)} aria-expanded={showEarlier}>
@@ -318,6 +353,68 @@ function Messages({ customerId, openHelp }: { customerId: string; openHelp: (mod
         </div>
       )}
     </>
+  );
+}
+
+// A gentle tip: calmer and informational. No hardship wording and no "Apply for hardship help" button:
+// this customer hasn't asked for help, so nothing suggests they're struggling. "See money tips" opens
+// a few generic tips (with a quiet link to Get help); "Not now" just marks it seen.
+function TipCard({
+  message: m,
+  isNew,
+  tipsOpen,
+  onSeeTips,
+  onNotNow,
+  openGetHelp,
+}: {
+  message: CustomerMessage;
+  isNew: boolean;
+  tipsOpen: boolean;
+  onSeeTips: () => void;
+  onNotNow: () => void;
+  openGetHelp: () => void;
+}) {
+  return (
+    <div className="mb-2 rounded-2xl border border-border-muted-soft bg-surface-info-faint p-3" data-testid="message-TIP">
+      <p className="mb-1 typography-body-10 font-bold text-text-info">Money tip</p>
+      <p className="flex items-center gap-1 typography-body-9 font-bold text-text-heading">
+        {m.in_app_title}
+        {isNew && (
+          <Badge color="info" soft type="pill" tag="span" data-testid="message-new">
+            New
+          </Badge>
+        )}
+      </p>
+      <p className="mt-1 typography-body-10 text-text-body">{m.in_app_body}</p>
+      {tipsOpen ? (
+        <div className="mt-2 rounded-xl bg-background-white p-2" data-testid="money-tips">
+          <p className="mb-1 typography-body-10 font-bold text-text-heading">A few money tips</p>
+          <ul className="list-disc pl-3 typography-body-10 text-text-body">
+            {MONEY_TIPS.map(t => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+          <p className="mt-2 typography-body-10 text-text-muted">
+            Need help?{' '}
+            <Button look="link" size="small" className="p-0" onClick={openGetHelp}>
+              Get help
+            </Button>
+          </p>
+          <Button look="faint" soft size="small" className="mt-1" onClick={onNotNow}>
+            Close
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-2 grid grid-cols-2 gap-1">
+          <Button look="primary" soft size="small" onClick={onSeeTips}>
+            See money tips
+          </Button>
+          <Button look="faint" soft size="small" onClick={onNotNow}>
+            Not now
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -287,6 +287,11 @@ function Phone({ customer }: { customer: string }) {
 function Message({ message: m }: { message: InboxMessage }) {
   return (
     <div className="rounded-xl border border-border-muted-soft bg-background-white p-2" data-testid={`message-${m.kind}`}>
+      {m.kind === 'QUIET_HELP' && m.variant === 'TIP' && (
+        <p className="mb-1 typography-body-10 text-text-muted" data-testid="tip-label">
+          Gentle tip (they haven't reached out)
+        </p>
+      )}
       <p className="typography-body-9 font-bold text-text-heading">{m.in_app_title}</p>
       <p className="mt-1 typography-body-10 text-text-body">{m.in_app_body}</p>
       {m.kind === 'QUIET_HELP' ? (

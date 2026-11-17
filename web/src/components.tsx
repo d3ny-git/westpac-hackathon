@@ -197,6 +197,24 @@ export function CodeBadge({ color, children }: { color: BadgeColor; children: Re
   );
 }
 
+// Which Quiet Help message a recommendation will send (Node D chose it; a person approves it).
+// "Support offer" if the customer reached out first, "Gentle tip" if not, with the one-line reason.
+export function quietHelpReason(reason: string | null | undefined): string {
+  return (reason ?? '').replace(/^(Offer|Tip, not an offer):\s*/, '');
+}
+
+export function QuietHelpMessageBadge({ message }: { message: string | null | undefined }) {
+  return message === 'TIP' ? (
+    <span data-testid="message-variant">
+      <CodeBadge color="info">Gentle tip</CodeBadge>
+    </span>
+  ) : (
+    <span data-testid="message-variant">
+      <CodeBadge color="hero">Support offer</CodeBadge>
+    </span>
+  );
+}
+
 const URGENCY: Record<string, [BadgeColor, string]> = {
   OVERDUE: ['danger', 'Overdue'],
   DUE_SOON: ['warning', 'Due soon'],

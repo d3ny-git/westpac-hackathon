@@ -68,6 +68,7 @@ call, test a scam caller, and try a collections notice. The sweeps run by themse
 | GEL React UI (`app.py`, `api/`, `web/`): the walkthrough at `/` with pages for A–E ([docs/REACT_UI_PLAN.md](docs/REACT_UI_PLAN.md), [docs/DEMO.md](docs/DEMO.md)) | Done |
 | Live apps: the customer app `/customer/` and the Westpac dashboard `/westpac/`, automatic sweeps and AI hardship assessments (`python app.py --live`), fail-closed on a tampered ledger, scam-call alerts ([docs/LIVE_APPS_PLAN.md](docs/LIVE_APPS_PLAN.md), [docs/LIVE_DEMO.md](docs/LIVE_DEMO.md)) | Done |
 | One-command setup: `python start.py` | Done |
+| Quiet Help message: a **support offer** if the customer reached out first (money-related contact in the last 30 days, Node B's `reached_out`), otherwise a **gentle tip** with no hardship wording; staff see which on Approvals. New demo customer Alex Morgan (`quiet_struggler`) shows the tip ([docs/LIVE_DEMO.md](docs/LIVE_DEMO.md)) | Done |
 
 ## The pipeline
 

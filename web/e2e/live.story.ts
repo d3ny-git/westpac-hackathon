@@ -4,6 +4,8 @@ import { Browser, Page, expect, test } from '@playwright/test';
 
 const HERO = 'cust_af4200';
 const JANE = '100200301';
+const ALEX_TOKEN = 'cust_6543f0'; // quiet_struggler: HIGH from transactions alone, never contacted the bank
+const ALEX = '100200309';
 
 async function windowFor(browser: Browser, url: string, width: number): Promise<Page> {
   const context = await browser.newContext({ viewport: { width, height: 900 } }); // separate sign-ins
@@ -16,9 +18,9 @@ async function tab(page: Page, name: string) {
   await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
 }
 
-async function approveCard(westpac: Page, kind: string): Promise<string> {
+async function approveCard(westpac: Page, kind: string, token = HERO): Promise<string> {
   await tab(westpac, 'Approvals');
-  const card = westpac.locator('[data-testid^="approval-"]').filter({ hasText: kind }).filter({ hasText: HERO });
+  const card = westpac.locator('[data-testid^="approval-"]').filter({ hasText: kind }).filter({ hasText: token });
   await expect(card).toHaveCount(1, { timeout: 60_000 }); // the automatic sweep recommends it
   const recId = (await card.getAttribute('data-testid'))!.replace('approval-', '');
   await card.getByRole('button', { name: 'Approve' }).click();
@@ -57,6 +59,14 @@ test('Jane and the hardship team, live: Quiet Help, the form, a booked call, P2 
   await expect(westpac.getByTestId('quiet-help')).toContainText(HERO);
 
   // 3. Staff approve; the next sweep carries it out by itself; Jane's Messages shows the offer.
+  //    Jane reached out first (her callback request), so it's the support offer.
+  await tab(westpac, 'Approvals');
+  const janeCard = westpac
+    .locator('[data-testid^="approval-"]')
+    .filter({ hasText: 'Quiet Help Push' })
+    .filter({ hasText: HERO });
+  await expect(janeCard.getByTestId('message-choice')).toContainText('Support offer', { timeout: 60_000 });
+  await expect(janeCard.getByTestId('message-choice')).toContainText('callback request on 7 Nov');
   await approveCard(westpac, 'Quiet Help Push');
   await customerTab(jane, 'Messages');
   await expect(jane.getByTestId('message-QUIET_HELP')).toContainText("We're here if you need a hand", { timeout: 60_000 });
@@ -123,4 +133,27 @@ test('Jane and the hardship team, live: Quiet Help, the form, a booked call, P2 
       expect(text, `${name} shows ${value}`).not.toContain(value);
     }
   }
+
+  // 8. Alex never contacted the bank: staff see a gentle tip; Alex's app shows a tip, no hardship wording.
+  await tab(westpac, 'Approvals');
+  const alexCard = westpac
+    .locator('[data-testid^="approval-"]')
+    .filter({ hasText: 'Quiet Help Push' })
+    .filter({ hasText: ALEX_TOKEN });
+  await expect(alexCard.getByTestId('message-choice')).toContainText('Gentle tip');
+  await expect(alexCard.getByTestId('message-choice')).toContainText('no money-related contact in the last 30 days');
+  await approveCard(westpac, 'Quiet Help Push', ALEX_TOKEN);
+  await expect(westpac.getByTestId('decided')).toContainText('Gentle tip');
+  const alex = await windowFor(browser, '/customer/', 390);
+  await alex.getByTestId('sign-in-customer').selectOption(ALEX);
+  await alex.getByRole('button', { name: 'Sign in' }).click();
+  await customerTab(alex, 'Messages');
+  const tip = alex.getByTestId('message-TIP');
+  await expect(tip).toContainText('A tip from Westpac: plan ahead with confidence', { timeout: 60_000 });
+  await expect(alex.getByRole('button', { name: 'Apply for hardship help' })).toHaveCount(0);
+  expect((await tip.innerText()).toLowerCase()).not.toContain('hardship');
+  await tip.getByRole('button', { name: 'See money tips' }).click();
+  await expect(alex.getByTestId('money-tips')).toContainText('bill reminders');
+  await alex.getByTestId('money-tips').getByRole('button', { name: 'Get help' }).click();
+  await expect(alex.getByRole('heading', { name: 'Get help' })).toBeVisible();
 });

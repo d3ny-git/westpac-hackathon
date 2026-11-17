@@ -224,13 +224,13 @@ test('start empty, run A and B from their pages: the same ledger as a one-click 
   await page.getByRole('button', { name: 'Run without the AI' }).click();
   await expect(page.getByTestId('a-run')).toContainText('COMPLETED', { timeout: 60_000 });
   await expect(page.getByTestId('a-run')).toContainText('Step 3: account_publish');
-  expect((await ledgerStatus(page)).count).toBe(9);
-  await expect(page.getByTestId('a-entries').locator('tbody tr')).toHaveCount(8);
+  expect((await ledgerStatus(page)).count).toBe(10); // 9 customers in data/raw (incl. quiet_struggler)
+  await expect(page.getByTestId('a-entries').locator('tbody tr')).toHaveCount(9);
 
   await go(page, 'Interactions (B)');
   await page.getByRole('button', { name: 'Run for all customers without the AI' }).click();
   await expect(page.getByText('Node B ran for 7 customers.')).toBeVisible({ timeout: 60_000 });
-  expect((await ledgerStatus(page)).count).toBe(19);
+  expect((await ledgerStatus(page)).count).toBe(20);
   expect(await headHash(page)).toBe(expected); // byte-for-byte the same ledger
   await expectSteps(page, [1, 2]);
 });

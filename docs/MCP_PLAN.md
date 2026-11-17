@@ -225,7 +225,7 @@ Tasks:
 |---|---|
 | `policy_check_action(token, action, requested_by, call_code?)` | ALLOW/BLOCK + policy + reason, written to the ledger (ACTION or BLOCKED). P2 blocks a default/collections notice while a hardship case is open. P3 blocks a caller with no matching CONTACT_SCHEDULED call code. P4 blocks a credit offer to a HIGH+ customer. |
 | `policy_deadlines()` | P1: promises due within 24h (ALERT) or past due (ESCALATE) |
-| `policy_recommend()` | Quiet Help list → QUIET_HELP_PUSH; open hardship with no meeting → BOOK_MEETING; missed deadline → ESCALATE. Written as RECOMMENDATION (AWAITING_APPROVAL). |
+| `policy_recommend()` | Quiet Help list → QUIET_HELP_PUSH (message OFFER if B says the customer reached out in the last 30 days, else a gentle TIP); open hardship with no meeting → BOOK_MEETING; missed deadline → ESCALATE. Written as RECOMMENDATION (AWAITING_APPROVAL). |
 | `policy_explain(entry_id)` | The facts behind a decision, for the AI to put into plain English |
 
 Tasks:

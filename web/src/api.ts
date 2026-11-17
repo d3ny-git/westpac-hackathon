@@ -189,6 +189,8 @@ export type TrackedRec = {
   customer_token: string;
   recommendation: string;
   why: string[];
+  message?: QuietHelpVariant | null; // QUIET_HELP_PUSH only: support OFFER or gentle TIP (older ones: OFFER)
+  message_reason?: string | null; // e.g. "Offer: callback request on 7 Nov"
   status: string;
   decided_by: string | null;
   entry_id: string;
@@ -222,6 +224,10 @@ export type Explanation = {
     calls_booked: number;
     last_quiet_help_push: string | null;
     quiet_help_push_in_last_30_days: boolean;
+    reached_out?: boolean | null; // Node B: a money-related contact in the last 30 days (null = not recorded)
+    reached_out_on?: string | null;
+    reached_out_via?: string | null;
+    quiet_help_message?: QuietHelpVariant;
   };
   evidence: Record<string, unknown>[];
 };
@@ -235,9 +241,11 @@ export type Queue = {
   items: ActionItem[];
   counts: { pending: number; approved: number; completed: number; rejected: number; total: number };
 };
+export type QuietHelpVariant = 'OFFER' | 'TIP';
 export type InboxMessage = {
   message_id: string | null;
   kind: 'QUIET_HELP' | 'MEETING';
+  variant?: QuietHelpVariant; // QUIET_HELP only: the support offer, or a gentle tip (no hardship wording)
   lock_screen: string;
   in_app_title: string;
   in_app_body: string;
