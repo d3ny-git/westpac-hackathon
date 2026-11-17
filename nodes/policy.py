@@ -10,6 +10,8 @@ D has two jobs:
      about to be missed (ALERT) or already were (ESCALATE).
   3. Recommender, recommend(): turns what the ledger shows into suggestions (Quiet Help push,
      book a meeting, escalate). Nothing happens until a PERSON approves one in Node E.
+     A Quiet Help push also says WHICH message to send (quiet_help_message): the support OFFER if
+     the customer reached out first (Node B's reached_out), otherwise a gentle TIP.
   4. Explainer, explain(entry_id): gathers the facts behind a recorded decision or recommendation,
      so a person (or the AI, via shared.llm.explain) can say WHY in plain English.
 
@@ -46,11 +48,12 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 from nodes.ledger import store
-from nodes.ledger.quiet_help import (CombinedScore, combine, combined_score, open_hardship_case, open_promises,
-                                     quiet_help_candidates, tracked_recommendations)
+from nodes.ledger.quiet_help import (CombinedScore, combine, combined_score, latest_scores, open_hardship_case,
+                                     open_promises, quiet_help_candidates, tracked_recommendations)
 from shared.config import (QUIET_HELP_COOLDOWN, COLLECTIONS_ACTIONS, CREDIT_OFFER_ACTIONS, HARDSHIP_RESPONSE_DAYS, HIGH_OR_ABOVE,
-                           P1_ALERT_WINDOW, RECOMMENDATION_COOLDOWN, ActionType, DeadlineLevel, DecisionResult,
-                           EntryType, PolicyId, PromiseType, RecommendationType, band, now)
+                           P1_ALERT_WINDOW, REACHED_OUT_WINDOW_DAYS, RECOMMENDATION_COOLDOWN, ActionType,
+                           DeadlineLevel, DecisionResult, EntryType, PolicyId, PromiseType, QuietHelpMessage,
+                           RecommendationType, Source, band, now)
 from shared.pii_guard import safe_tool
 from shared.schemas import (ActionRequest, Actor, ContactScheduled, CustomerToken, DeadlineAlert, Decision,
                             EntryId, LedgerEntry, Promise, Recommendation)
@@ -264,13 +267,49 @@ def _already_recommended(token: str, kind: str, history, at: datetime) -> bool:
     return False
 
 
+# Which Quiet Help message (D chooses, a person approves, E sends it)
+_CONTACT_WORDS = {"HARDSHIP_FORM": "hardship form", "CALLBACK_REQUEST": "callback request",
+                  "HARDSHIP_KEYWORDS": "hardship words in a contact"}
+TIP_REASON = f"Tip, not an offer: no money-related contact in the last {REACHED_OUT_WINDOW_DAYS} days"
+
+
+def quiet_help_message(interaction_score: Optional[dict[str, Any]]) -> tuple[str, str]:
+    """OFFER or TIP for a Quiet Help push, and why in one line. Pure: pass the customer's latest
+    INTERACTION score data (or None if Node B never scored them).
+
+      reached out first (a money-related contact in the last 30 days)  -> OFFER, e.g.
+          "Offer: callback request on 7 Nov"
+      didn't, or Node B has no score for them                          -> TIP
+      an older score that doesn't say (written before Node B published it) -> OFFER, as before
+    """
+    if interaction_score is None:
+        return QuietHelpMessage.TIP.value, TIP_REASON
+    if interaction_score.get("reached_out") is None:
+        return QuietHelpMessage.OFFER.value, "Offer: this interaction score doesn't record contacts (older entry)"
+    if not interaction_score["reached_out"]:
+        return QuietHelpMessage.TIP.value, TIP_REASON
+    what = _CONTACT_WORDS.get(interaction_score.get("reached_out_via") or "", "money-related contact")
+    on = interaction_score.get("reached_out_on")
+    day = datetime.fromisoformat(str(on)) if on else None
+    when = f" on {day.day} {day:%b}" if day else ""
+    return QuietHelpMessage.OFFER.value, f"Offer: {what}{when}"
+
+
+def customer_quiet_help_message(customer_token: str, *, db_path: DbPath = None) -> tuple[str, str]:
+    """quiet_help_message() for one customer, from their latest INTERACTION score in the ledger."""
+    entry = latest_scores(customer_token, db_path=db_path).get(Source.INTERACTION.value)
+    return quiet_help_message(entry.data if entry else None)
+
+
 def recommend(*, db_path: DbPath = None) -> list[Recommendation]:
     """Turn what the ledger shows into NEW recommendations, record them, and return them.
 
     The rules (plain Python, in this order):
       ESCALATE         a promise to the customer is overdue (P1)
       BOOK_MEETING     the customer has an open hardship case but no meeting booked
-      QUIET_HELP_PUSH  the customer is on the Quiet Help list (C-6)
+      QUIET_HELP_PUSH  the customer is on the Quiet Help list (C-6). It carries `message`: OFFER if
+                       they reached out first, otherwise TIP (see quiet_help_message), and the
+                       one-line `message_reason`
 
     No repeats: D skips a recommendation if the same one for the same customer is still awaiting
     approval / approved, or was made in the last 30 days (so a rejection isn't re-suggested the
@@ -281,7 +320,7 @@ def recommend(*, db_path: DbPath = None) -> list[Recommendation]:
     """
     at = now()
     history = tracked_recommendations(db_path=db_path)
-    wanted: list[tuple[str, str, list[str]]] = []          # (customer, recommendation, why)
+    wanted: list[tuple[str, str, list[str], dict]] = []    # (customer, recommendation, why, extra fields)
 
     # 1. ESCALATE: overdue promises (one recommendation per customer, listing what's overdue).
     overdue: dict[str, list[str]] = {}
@@ -289,7 +328,7 @@ def recommend(*, db_path: DbPath = None) -> list[Recommendation]:
         if alert.level == DeadlineLevel.ESCALATE.value:
             overdue.setdefault(alert.customer_token, []).append(f"{alert.promise_type}_OVERDUE")
     for token, whys in overdue.items():
-        wanted.append((token, RecommendationType.ESCALATE.value, ["P1_PROMISE_MISSED", *dict.fromkeys(whys)]))
+        wanted.append((token, RecommendationType.ESCALATE.value, ["P1_PROMISE_MISSED", *dict.fromkeys(whys)], {}))
 
     # 2. BOOK_MEETING: open hardship case, but no meeting promise yet.
     open_now = open_promises(db_path=db_path)
@@ -297,20 +336,21 @@ def recommend(*, db_path: DbPath = None) -> list[Recommendation]:
     cases = sorted({t.promise.customer_token for t in open_now
                     if t.promise.promise_type == PromiseType.HARDSHIP_RESPONSE.value} - has_meeting)
     for token in cases:
-        wanted.append((token, RecommendationType.BOOK_MEETING.value, ["HARDSHIP_CASE_OPEN", "NO_MEETING_BOOKED"]))
+        wanted.append((token, RecommendationType.BOOK_MEETING.value, ["HARDSHIP_CASE_OPEN", "NO_MEETING_BOOKED"], {}))
 
     # 3. QUIET_HELP_PUSH: the Quiet Help list (already sorted, highest score first).
     for c in quiet_help_candidates(db_path=db_path):
+        message, reason = customer_quiet_help_message(c.customer_token, db_path=db_path)
         wanted.append((c.customer_token, RecommendationType.QUIET_HELP_PUSH.value,
-                       [f"SCORE_{c.band}", *c.reasons]))
+                       [f"SCORE_{c.band}", *c.reasons], {"message": message, "message_reason": reason}))
 
     # 4. Record the ones that aren't repeats.
     created: list[Recommendation] = []
-    for token, kind, why in wanted:
+    for token, kind, why, extra in wanted:
         if _already_recommended(token, kind, history, at):
             continue
         rec = Recommendation(rec_id=store.next_id("R", db_path=db_path), customer_token=token,
-                             recommendation=kind, why=why)
+                             recommendation=kind, why=why, **extra)
         store.append(EntryType.RECOMMENDATION, token, rec.model_dump(mode="json"), db_path=db_path)
         created.append(rec)
     return created
@@ -335,7 +375,10 @@ RECOMMENDATION_RULES = {
     "ESCALATE": "A promise to the customer is overdue, so a team lead should step in.",
     "BOOK_MEETING": "The customer has an open hardship case but no meeting booked, so book a call with a specialist.",
     "QUIET_HELP_PUSH": "The customer's hardship score is HIGH or CRITICAL, they have no open hardship case and no "
-                       "Quiet Help message in the last 30 days, so offer help privately in the app.",
+                       "Quiet Help message in the last 30 days, so offer help privately in the app. If they "
+                       "reached out first (a hardship form, callback request or hardship words in the last 30 "
+                       "days) the message is the support offer; if not, it's a gentle money tip with no "
+                       "hardship wording.",
 }
 _HIDDEN = "(hidden)"
 
@@ -387,6 +430,7 @@ def _facts_before(prior: list[LedgerEntry], at: datetime) -> tuple[dict[str, Any
 
     a = scores["ACCOUNT"].data["score"] if "ACCOUNT" in scores else None
     b = scores["INTERACTION"].data["score"] if "INTERACTION" in scores else None
+    contact = scores["INTERACTION"].data if "INTERACTION" in scores else {}
     open_p = [e for pid, e in promises.items() if status[pid] == "OPEN"]
     cases = [e for e in open_p if e.data["promise_type"] == "HARDSHIP_RESPONSE"]
     meetings = [e for e in open_p if e.data["promise_type"] == "MEETING"]
@@ -406,6 +450,11 @@ def _facts_before(prior: list[LedgerEntry], at: datetime) -> tuple[dict[str, Any
         "calls_booked": len(contacts),                                 # how many, never the codes
         "last_quiet_help_push": pushes[-1].created_at.isoformat() if pushes else None,
         "quiet_help_push_in_last_30_days": bool(pushes and pushes[-1].created_at > at - QUIET_HELP_COOLDOWN),
+        # Node B: did they reach out first? (None = not recorded.) Decides the Quiet Help message.
+        "reached_out": contact.get("reached_out"),
+        "reached_out_on": contact.get("reached_out_on"),
+        "reached_out_via": contact.get("reached_out_via"),
+        "quiet_help_message": quiet_help_message(contact or None)[0],
     }
     groups = {"scores": list(scores.values()), "cases": cases, "meetings": meetings,
               "overdue": overdue, "contacts": contacts, "pushes": pushes[-1:]}
@@ -514,7 +563,8 @@ def register(mcp) -> None:
         """Create NEW recommendations from the ledger and return them (an empty list if there's nothing new).
 
         ESCALATE for overdue promises, BOOK_MEETING for an open hardship case with no meeting,
-        QUIET_HELP_PUSH for customers on the Quiet Help list. Each is recorded as
+        QUIET_HELP_PUSH for customers on the Quiet Help list, with message OFFER (they reached out
+        first) or TIP (they didn't: a gentle tip, no hardship wording) and message_reason. Each is recorded as
         AWAITING_APPROVAL: nothing happens until a PERSON approves it. Never repeats a
         recommendation that is still waiting or was made in the last 30 days.
         """

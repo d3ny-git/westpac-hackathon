@@ -42,7 +42,7 @@ from shared.config import (CALL_CODE_PATTERN, CUSTOMER_TOKEN_PATTERN, ENTRY_ID_P
                            SYSTEM_ACTOR, AccountType, ActionType, Band, Category, Channel,
                            DeadlineLevel, DecisionResult, EntryType, FormStatus,
                            InteractionType, PolicyId, PromiseStatus, PromiseType,
-                           QuietHelpOption, ReachedOutVia, RecommendationStatus,
+                           QuietHelpMessage, QuietHelpOption, ReachedOutVia, RecommendationStatus,
                            RecommendationType, Source, band)
 
 # ===========================================================================
@@ -272,6 +272,21 @@ class Recommendation(Contract):
     recommendation: RecommendationType
     why: list[ReasonCode]
     status: RecommendationStatus = RecommendationStatus.AWAITING_APPROVAL
+    # QUIET_HELP_PUSH only: which message to send (OFFER if the customer reached out first,
+    # otherwise TIP) and why, in plain words. Older recommendations have neither: they're OFFERs.
+    message: Optional[QuietHelpMessage] = None
+    message_reason: Optional[str] = Field(default=None, max_length=200)
+
+    @model_serializer(mode="wrap")
+    def _dump(self, handler):
+        return _omit_unset(self, handler(self), ("message", "message_reason"), "message")
+
+    @property
+    def quiet_help_message(self) -> Optional[str]:
+        """OFFER or TIP for a QUIET_HELP_PUSH (OFFER when an older one doesn't say), else None."""
+        if self.recommendation != RecommendationType.QUIET_HELP_PUSH.value:
+            return None
+        return self.message or QuietHelpMessage.OFFER.value
 
 
 # ===========================================================================
@@ -294,6 +309,11 @@ class QuietHelpPush(Contract):
     action: Literal["QUIET_HELP_PUSH"] = "QUIET_HELP_PUSH"
     message_id: MessageId
     options: list[QuietHelpOption]
+    message: Optional[QuietHelpMessage] = None   # OFFER or TIP (older pushes don't say: they were OFFERs)
+
+    @model_serializer(mode="wrap")
+    def _dump(self, handler):
+        return _omit_unset(self, handler(self), ("message",), "message")
 
 
 class MeetingBooking(Contract):

@@ -15,7 +15,7 @@ actions_status, actions_inbox. approve/reject are NEVER tools: only a person can
 Call codes are hidden in everything a tool returns, so the AI never sees one.
 
 What actions_execute_approved() writes (same order as mock_input_output/E_actions):
-    QUIET_HELP_PUSH   ACTION (QuietHelpPush, message M-xxxx)                         -> STATUS_UPDATE DONE
+    QUIET_HELP_PUSH   ACTION (QuietHelpPush, message M-xxxx, OFFER or TIP)           -> STATUS_UPDATE DONE
     BOOK_MEETING      ACTION (MeetingBooking) -> CONTACT_SCHEDULED (call code)
                       -> PROMISE (MEETING)                                            -> STATUS_UPDATE DONE
     ESCALATE          ACTION (Escalation)                                             -> STATUS_UPDATE DONE
@@ -195,7 +195,20 @@ def actions_status(rec_id: str) -> dict:
 # Carrying out approved recommendations (FLOW-1)
 # ============================================================
 
-QUIET_HELP_OPTIONS = ["PAUSE_REPAYMENTS", "REDUCE_REPAYMENTS", "BOOK_CALL"]
+QUIET_HELP_OPTIONS = ["PAUSE_REPAYMENTS", "REDUCE_REPAYMENTS", "BOOK_CALL"]     # the support OFFER
+QUIET_HELP_TIP_OPTIONS = ["SEE_MONEY_TIPS"]                                       # the gentle TIP
+
+# What the customer's app shows for each Quiet Help message. D chooses OFFER (they reached out
+# first) or TIP (they didn't); a person approves it. The TIP never mentions hardship or implies
+# the customer is struggling, so nobody who hasn't asked for help is offended.
+QUIET_HELP_TEXT = {
+    "OFFER": {"in_app_title": "We're here if you need a hand",
+              "in_app_body": "If things are tight right now, you have options. "
+                             "Choose one below or ignore this message."},
+    "TIP": {"in_app_title": "A tip from Westpac: plan ahead with confidence",
+            "in_app_body": "Set up bill reminders, see where your money goes each month, and remember: "
+                           "if things ever change, we can work with you on your repayments."},
+}
 MEETING_DAYS_AHEAD = 2           # meetings are booked 2 days ahead...
 MEETING_HOUR = 14                # ...at 2pm (16 Nov 10:00 -> 18 Nov 14:00, as in the SPEC)
 MEETING_DESCRIPTION = "Hardship specialist to call at the booked time and quote the call code"
@@ -244,7 +257,10 @@ def _execute_one(rec: Recommendation, approval: Approval) -> dict:
 
     # 2. Carry it out.
     if rec.recommendation == "QUIET_HELP_PUSH":
-        result = QuietHelpPush(customer_token=token, message_id=store.next_id("M"), options=QUIET_HELP_OPTIONS)
+        message = rec.quiet_help_message                     # OFFER or TIP, as D chose and a person approved
+        options = QUIET_HELP_TIP_OPTIONS if message == "TIP" else QUIET_HELP_OPTIONS
+        result = QuietHelpPush(customer_token=token, message_id=store.next_id("M"), options=options,
+                               message=message)
         store.append("ACTION", token, result.model_dump(mode="json"))
 
     elif rec.recommendation == "BOOK_MEETING":
@@ -299,17 +315,16 @@ def actions_inbox(customer_token: str) -> list[dict]:
     """What the customer's app shows, oldest first (format of mock_input_output/E_actions/output/customer_inbox.json).
 
     The lock screen only ever says "You have a new message from Westpac"; the options, meeting
-    time and call code are only shown inside the app.
+    time and call code are only shown inside the app. A Quiet Help message has `variant`: OFFER
+    (the support offer) or TIP (a gentle money tip, no hardship wording). Older pushes are OFFERs.
     """
     inbox = []
     for entry in store.read(customer_token=customer_token, entry_type="ACTION"):
         d = entry.data
         if d.get("action") == "QUIET_HELP_PUSH" and "message_id" in d:
+            variant = d.get("message") or "OFFER"
             inbox.append({"message_id": d["message_id"], "kind": "QUIET_HELP", "lock_screen": LOCK_SCREEN,
-                          "in_app_title": "We're here if you need a hand",
-                          "in_app_body": "If things are tight right now, you have options. "
-                                         "Choose one below or ignore this message.",
-                          "options": d["options"]})
+                          **QUIET_HELP_TEXT[variant], "options": d["options"], "variant": variant})
         elif d.get("action") == "BOOK_MEETING" and "call_code" in d:
             inbox.append({"message_id": None, "kind": "MEETING", "lock_screen": LOCK_SCREEN,
                           "in_app_title": "Your call with a hardship specialist",
@@ -373,8 +388,9 @@ def register(mcp) -> None:
     @mcp.tool(name="actions_inbox")
     @safe_tool
     def tool_inbox(customer_token: CustomerToken) -> list[dict]:
-        """The messages a customer can see in their Westpac app (Quiet Help offers, booked calls).
+        """The messages a customer can see in their Westpac app (Quiet Help messages, booked calls).
 
+        A Quiet Help message has variant OFFER (support offer) or TIP (gentle money tip).
         The lock screen only ever says "You have a new message from Westpac". Call codes are hidden.
         """
         return _hide_call_codes(actions_inbox(customer_token))

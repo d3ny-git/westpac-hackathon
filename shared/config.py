@@ -224,9 +224,21 @@ class RecommendationStatus(str, Enum):
 
 class QuietHelpOption(str, Enum):
     """One-tap options shown inside the app after a Quiet Help push."""
-    PAUSE_REPAYMENTS = "PAUSE_REPAYMENTS"
-    REDUCE_REPAYMENTS = "REDUCE_REPAYMENTS"
-    BOOK_CALL = "BOOK_CALL"
+    PAUSE_REPAYMENTS = "PAUSE_REPAYMENTS"    # support OFFER
+    REDUCE_REPAYMENTS = "REDUCE_REPAYMENTS"  # support OFFER
+    BOOK_CALL = "BOOK_CALL"                  # support OFFER
+    SEE_MONEY_TIPS = "SEE_MONEY_TIPS"        # gentle TIP
+
+
+class QuietHelpMessage(str, Enum):
+    """Which Quiet Help message a customer gets.
+
+    OFFER  they reached out first (money-related contact in the last 30 days): the support offer
+           ("We're here if you need a hand", pause / reduce repayments, book a call)
+    TIP    they haven't: a gentle money tip, with no hardship wording, so nobody is offended
+    """
+    OFFER = "OFFER"
+    TIP = "TIP"
 
 
 class ReachedOutVia(str, Enum):
