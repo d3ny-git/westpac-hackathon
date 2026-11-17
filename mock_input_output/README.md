@@ -96,6 +96,7 @@ Cap at 100. Bands: LOW < 30, MODERATE 30–59, HIGH 60–79, CRITICAL 80+.
 | `late_callback` | `cust_2c7c98` | 30 MODERATE | 0 LOW | Callback was due 14 Nov 10:00, so it's **overdue** and policy P1 should escalate |
 | `steady_bnpl` | `cust_9f4bf9` | 8 LOW | 25 LOW | 3 BNPL providers; says "struggling to pay" through the mock form |
 | `tight_month` | `cust_5e4a19` | 8 LOW | 0 LOW | 4 overdrawn days before payday; a complaint email |
+| `quiet_struggler` | `cust_6543f0` | **61 HIGH** | – (no interactions) | Alex Morgan (`100200309`). **Only in `data/raw/transactions_raw.csv`** (the demo data), not in the files here or `personas.json`, so the golden outputs are unchanged. Salary stopped after 2 Oct, 14 overdrawn days, 3 BNPL providers (Afterpay, Zip, Humm), no dishonour. Never contacted the bank, so Node B has no score for them and their Quiet Help message is a **gentle tip**, not the support offer |
 
 **Hero before the form:** with only the history CSV processed, hero's B score is **0 LOW** (2 contacts, no keywords). That's why hero is a Quiet Help candidate first. Once the mock form is submitted, it becomes 50, and combined with A it's floor(63 + 50/4) = **75 HIGH**.
 

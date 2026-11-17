@@ -32,6 +32,7 @@ export type CustomerOverview = {
 export type CustomerMessage = {
   n: number;
   kind: 'QUIET_HELP' | 'MEETING';
+  variant?: 'OFFER' | 'TIP'; // QUIET_HELP only: the support offer, or a gentle tip (no hardship wording)
   lock_screen: string;
   in_app_title: string;
   in_app_body: string;

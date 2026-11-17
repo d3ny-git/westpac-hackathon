@@ -48,6 +48,8 @@ import {
   Loading,
   Metric,
   Metrics,
+  QuietHelpMessageBadge,
+  quietHelpReason,
   StatusBadge,
   UrgencyBadge,
   stamp,
@@ -469,6 +471,20 @@ function Approvals({ staff, recs }: { staff: string; recs: TrackedRec[] | undefi
             { header: 'Rec', cell: r => r.rec_id },
             { header: 'Customer', cell: r => r.customer_token },
             { header: 'Recommendation', cell: r => titleCase(r.recommendation) },
+            {
+              header: 'Message',
+              cell: r =>
+                r.recommendation === 'QUIET_HELP_PUSH' ? (
+                  <span className="flex flex-col items-start gap-1">
+                    <QuietHelpMessageBadge message={r.message} />
+                    {r.message_reason && (
+                      <span className="typography-body-10 text-text-muted">{quietHelpReason(r.message_reason)}</span>
+                    )}
+                  </span>
+                ) : (
+                  ''
+                ),
+            },
             { header: 'Status', cell: r => <StatusBadge status={r.status} /> },
             { header: 'Decided by', cell: r => r.decided_by ?? '' },
             {
@@ -504,6 +520,12 @@ function PendingCard({
           {rec.rec_id} · {rec.customer_token}
         </span>
       </div>
+      {rec.recommendation === 'QUIET_HELP_PUSH' && (
+        <p className="mt-1 flex flex-wrap items-center gap-1 typography-body-10" data-testid="message-choice">
+          <QuietHelpMessageBadge message={rec.message} />
+          {rec.message_reason && <span className="text-text-muted">{quietHelpReason(rec.message_reason)}</span>}
+        </p>
+      )}
       <Caption>Why: {rec.why.join(', ')}</Caption>
       {facts.data && (
         <p className="mt-1 typography-body-10">

@@ -62,12 +62,36 @@ If nothing changed, nothing runs: no AI calls while idle.
 | # | Jane's phone | Westpac dashboard |
 |---|---|---|
 | 1 | **Home:** "Good morning, Jane", her Everyday account and home loan, recent transactions (Afterpay, Zip, Klarna, rent...). No scores, no tokens: just her banking. | **Overview:** ledger verified; the first automatic sweep's AI summary; P1 alert (a callback 2 days overdue); Risk Dashboard; **Quiet Help list: `cust_af4200` 63 HIGH**. |
-| 2 | – | **Approvals (4):** the sweep recommended a **Quiet Help Push** for `cust_af4200`. Show the facts, click **Explain in plain English (AI)**, then **Approve**. |
+| 2 | – | **Approvals (5):** the sweep recommended a **Quiet Help Push** for `cust_af4200`, badged **Support offer · callback request on 7 Nov** (she reached out first). Show the facts, click **Explain in plain English (AI)**, then **Approve**. |
 | 3 | Within a few seconds, **Messages**: the lock screen says only "You have a new message from Westpac"; inside: "We're here if you need a hand", with what Westpac can do. | The live bar shows the sweep carrying it out; **Approvals → Decided:** DONE. |
 | 4 | Tap **Apply for hardship help**, write what's happening (try including her name and phone number), **Submit my request**. "We'll respond by Mon 7 Dec, 5:00 pm". | **New contacts:** `cust_af4200`, Hardship Form, flags `JOB_LOSS` / `CANT_AFFORD`, interaction score 75, and the **AI hardship assessment** (signs, urgency, promises owed, suggested next step). No name, no phone: sanitized on arrival. |
 | 5 | **Our promises:** "We'll respond to your hardship request by Mon 7 Dec, 5:00 pm", "We'll call you back on Wed 18 Nov, 2:00 pm". | The next sweep (woken by the form) recommends **Book Meeting** for `cust_af4200`. **Approve.** |
 | 6 | **Messages:** "Your call with a hardship specialist", 18 Nov, 2:00 pm, and **her call code** in six boxes. | **Check an action:** customer `cust_af4200`, `SEND_DEFAULT_NOTICE` → **BLOCK (P2)**: hardship request received today. |
 | 7 | **Is this Westpac?:** type a wrong code (e.g. `K7P4QX`) → "Hang up: this isn't Westpac". Then the code from Messages → "This matches your call code". | **Audit:** the P2 and P3 decisions, the actions carried out (call code hidden), the full ledger, chain verified. |
+
+## The tip path: Alex Morgan (optional, about 1 minute)
+
+Quiet Help sends one of two messages, chosen by Node D and approved by a person like any other:
+
+- **Support offer** if the customer **reached out first**: a money-related contact in the last 30 days
+  (a hardship form of any status, a callback request, or hardship words such as "lost my job" or
+  "can't afford"). That's Jane (callback request on 7 Nov) and Priya (abandoned hardship form on 6 Nov):
+  "We're here if you need a hand", the options, Apply for hardship help / Talk to someone.
+- **Gentle tip** if they **haven't**: no hardship wording and nothing that implies they're struggling,
+  so nobody is offended. A general chat or a complaint without those words doesn't count as reaching out.
+
+Alex Morgan (`cust_6543f0`, persona `quiet_struggler`) never contacted the bank, but their transactions
+alone score **61 HIGH** (salary stopped, 14 overdrawn days, 3 BNPL providers), so they're on the Quiet
+Help list too.
+
+| # | Alex's phone (sign in as Alex Morgan) | Westpac dashboard |
+|---|---|---|
+| 1 | – | **Approvals:** a **Quiet Help Push** for `cust_6543f0`, badged **Gentle tip · no money-related contact in the last 30 days**. **Approve.** **Decided** shows the badge too, and the ledger's ACTION entry records `"message": "TIP"`. |
+| 2 | **Messages:** "A tip from Westpac: plan ahead with confidence", with **See money tips** and **Not now**. No "Apply for hardship help". **See money tips** opens a few tips and a quiet "Need help? Get help" link. | – |
+
+Adding Alex shifted one ID in Jane's story: Alex's tip is **R-0005**, so Jane's **Book Meeting is now
+R-0006** (it was R-0005), and her call code (an HMAC of the rec ID) is different from older recordings.
+Her scores (63 / 75 / 90), messages, promises (P-0003 / P-0004) and every step above are unchanged.
 
 ## What to point out
 

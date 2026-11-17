@@ -464,6 +464,10 @@ with tab2:
                         expanded=(n == len(inbox) - 1),
                     ):
 
+                        if message.get("variant") == "TIP":
+                            # A gentle tip: the customer hasn't reached out, so no hardship wording.
+                            st.caption("Gentle tip (they haven't reached out)")
+
                         st.write(message["in_app_body"])
 
                         if message["kind"] == "QUIET_HELP":

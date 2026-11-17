@@ -34,7 +34,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import (BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter,
-                      field_validator, model_validator)
+                      field_validator, model_serializer, model_validator)
 
 from shared.config import (CALL_CODE_PATTERN, CUSTOMER_TOKEN_PATTERN, ENTRY_ID_PATTERN,
                            HASH_PATTERN, MESSAGE_ID_PATTERN, PROMISE_ID_PATTERN,
@@ -42,8 +42,8 @@ from shared.config import (CALL_CODE_PATTERN, CUSTOMER_TOKEN_PATTERN, ENTRY_ID_P
                            SYSTEM_ACTOR, AccountType, ActionType, Band, Category, Channel,
                            DeadlineLevel, DecisionResult, EntryType, FormStatus,
                            InteractionType, PolicyId, PromiseStatus, PromiseType,
-                           QuietHelpOption, RecommendationStatus, RecommendationType,
-                           Source, band)
+                           QuietHelpMessage, QuietHelpOption, ReachedOutVia, RecommendationStatus,
+                           RecommendationType, Source, band)
 
 # ===========================================================================
 # 1. Building blocks
@@ -73,6 +73,17 @@ class Contract(BaseModel):
     validate_default    default values are checked too
     """
     model_config = ConfigDict(extra="forbid", frozen=True, use_enum_values=True, validate_default=True)
+
+
+def _omit_unset(model: BaseModel, data: dict[str, Any], fields: tuple[str, ...], key: str) -> dict[str, Any]:
+    """Leave optional fields that were added later out of the dump while `key` is unset (None).
+
+    So a message that doesn't use them looks exactly as it did before they existed (same ledger
+    data, same golden files), and old entries without them still validate."""
+    if getattr(model, key) is None:
+        for name in fields:
+            data.pop(name, None)
+    return data
 
 
 def _empty_to_none(value: Any) -> Any:
@@ -136,6 +147,17 @@ class ScoreMessage(Contract):
     band: Band
     reasons: list[ReasonCode]          # rule codes that added points, e.g. SALARY_STOPPED
     timestamp: datetime
+    # Node B only (optional, so ACCOUNT scores and older entries are unchanged). Did the customer
+    # reach out first: a money-related contact (hardship form of any status, callback request,
+    # hardship keywords) in the last 30 days? None = not recorded (an ACCOUNT score, or an
+    # INTERACTION score written before Node B published it).
+    reached_out: Optional[bool] = None
+    reached_out_on: Optional[date] = None           # the day of the latest such contact
+    reached_out_via: Optional[ReachedOutVia] = None  # what it was
+
+    @model_serializer(mode="wrap")
+    def _dump(self, handler):
+        return _omit_unset(self, handler(self), ("reached_out", "reached_out_on", "reached_out_via"), "reached_out")
 
     @model_validator(mode="after")
     def _band_matches_score(self) -> "ScoreMessage":
@@ -250,6 +272,21 @@ class Recommendation(Contract):
     recommendation: RecommendationType
     why: list[ReasonCode]
     status: RecommendationStatus = RecommendationStatus.AWAITING_APPROVAL
+    # QUIET_HELP_PUSH only: which message to send (OFFER if the customer reached out first,
+    # otherwise TIP) and why, in plain words. Older recommendations have neither: they're OFFERs.
+    message: Optional[QuietHelpMessage] = None
+    message_reason: Optional[str] = Field(default=None, max_length=200)
+
+    @model_serializer(mode="wrap")
+    def _dump(self, handler):
+        return _omit_unset(self, handler(self), ("message", "message_reason"), "message")
+
+    @property
+    def quiet_help_message(self) -> Optional[str]:
+        """OFFER or TIP for a QUIET_HELP_PUSH (OFFER when an older one doesn't say), else None."""
+        if self.recommendation != RecommendationType.QUIET_HELP_PUSH.value:
+            return None
+        return self.message or QuietHelpMessage.OFFER.value
 
 
 # ===========================================================================
@@ -272,6 +309,11 @@ class QuietHelpPush(Contract):
     action: Literal["QUIET_HELP_PUSH"] = "QUIET_HELP_PUSH"
     message_id: MessageId
     options: list[QuietHelpOption]
+    message: Optional[QuietHelpMessage] = None   # OFFER or TIP (older pushes don't say: they were OFFERs)
+
+    @model_serializer(mode="wrap")
+    def _dump(self, handler):
+        return _omit_unset(self, handler(self), ("message",), "message")
 
 
 class MeetingBooking(Contract):
