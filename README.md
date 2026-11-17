@@ -6,7 +6,35 @@ Westpac hackathon project. Westpac was fined $26m for missing customer hardship 
 - applies plain-code policies
 - recommends actions that a human must approve
 
-Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit UI and SQLite, all running locally.
+Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, SQLite, and a React UI using Westpac's GEL design
+system (plus the original Streamlit pages), all running locally.
+
+## Try it (about 2 minutes)
+
+You need **Python 3.11 or newer** and **git**. Nothing else: the web UI is already built.
+
+```bash
+git clone https://github.com/d3ny-git/westpac-hackathon.git
+cd westpac-hackathon
+python start.py            # Windows: py start.py   ·   macOS/Linux may need: python3 start.py
+```
+
+The first run sets everything up in `.venv/` (2–3 minutes), builds the demo data and opens your browser.
+Then open these side by side:
+
+| What | URL | Sign in as |
+|---|---|---|
+| **Customer app** (Jane's phone) | http://127.0.0.1:8600/customer/ | Jane Citizen |
+| **Westpac dashboard** (staff) | http://127.0.0.1:8600/westpac/ | staff_19c |
+| How it works (walkthrough) | http://127.0.0.1:8600/ | |
+
+Follow the story in [docs/LIVE_DEMO.md](docs/LIVE_DEMO.md): approve Jane's Quiet Help, send her hardship form, book the
+call, test a scam caller, and try a collections notice. The sweeps run by themselves.
+
+- **The AI is optional.** Everything works without it. To switch it on, put an OpenRouter key in `.env` (created
+  for you from `.env.example`) and run `python start.py` again.
+- `python start.py --reset` starts from fresh demo data · `--port 8601` uses another port · `--no-ai` turns the AI off.
+- All data is made up. The sign-in pages are demo pickers, not real logins: run it on your own machine only.
 
 ## Status
 
@@ -36,8 +64,10 @@ Built in Python with one MCP server (`mcp` 2.x), an OpenRouter LLM, a Streamlit 
 | AB-2 Node A (`nodes/account.py`) and AB-3 Node B (`nodes/interaction.py`): scoring from clean data, B's promises, 4 MCP tools each. **The server now has all 5 nodes (21 tools)** | Done |
 | AB-4 A/B runbooks (`a_account.md`, `b_interaction.md`) + `python scripts/reset_demo.py`: the REAL pipeline, raw data → sanitize → A and B → ledger, with a PII self-check | Done |
 | AB-5 A and B pages: `streamlit run ui/pages/A.py` (raw → clean, run A's workflow, scores) and `ui/pages/B.py` (**B's mock input form**: kept vs thrown away → B's workflow → promises) | Done |
-| **A, B, C, D and E are all built; the SPEC's full story runs on the real pipeline.** Next: FLOW-4 (GEL React UI) on branch `ui/gel-react` | In progress |
-| Nodes A–E, UI | Not started. Build against `mock_input_output/` until upstream nodes are ready. |
+| **A, B, C, D and E are all built; the SPEC's full story runs on the real pipeline.** | Done |
+| GEL React UI (`app.py`, `api/`, `web/`): the walkthrough at `/` with pages for A–E ([docs/REACT_UI_PLAN.md](docs/REACT_UI_PLAN.md), [docs/DEMO.md](docs/DEMO.md)) | Done |
+| Live apps: the customer app `/customer/` and the Westpac dashboard `/westpac/`, automatic sweeps and AI hardship assessments (`python app.py --live`), fail-closed on a tampered ledger, scam-call alerts ([docs/LIVE_APPS_PLAN.md](docs/LIVE_APPS_PLAN.md), [docs/LIVE_DEMO.md](docs/LIVE_DEMO.md)) | Done |
+| One-command setup: `python start.py` | Done |
 
 ## The pipeline
 
@@ -132,16 +162,17 @@ scripts/       generate_raw_data.py  reset_demo.py  tamper_demo.py
 tests/
 ```
 
-## Setup (once Phase 0 lands)
+## Developer setup
 
-> These commands won't work yet. The code, `requirements.txt` and scripts arrive in Phase 0.
+To just try it, use `python start.py` (above). For development:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-# create a .env file with the values Owner-CD shares with the team (not stored in GitHub):
-#   OPENROUTER_API_KEY, OPENROUTER_MODEL, TOKEN_SECRET, CALL_CODE_SECRET
+pip install -r requirements.txt -r requirements-web.txt
+cp .env.example .env             # then add OPENROUTER_API_KEY (optional; see .env.example)
+python app.py --live             # the React UI + live apps on http://127.0.0.1:8600 (see docs/LIVE_DEMO.md)
+cd web && npm ci && npm run build && cd ..   # only after changing the web UI (needs Node 22+); commit web/dist
 python -m shared.llm             # check your OpenRouter key + model work (works today)
 python -m pytest                 # run the tests (works today)
 python scripts/reset_demo.py     # start a demo: raw data -> sanitize -> A and B -> ledger (works today)

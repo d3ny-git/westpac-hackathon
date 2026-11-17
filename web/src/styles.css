@@ -1,0 +1,8 @@
+/* GEL setup, as in GEL's installing-westpac-ui guide.
+   No brand font files: GEL's fallback (system) fonts are used, because the brand fonts are
+   commercial and not covered by the MIT licence. Light mode only (GEL's dark mode is disabled). */
+@import 'tailwindcss';
+@import '@westpac/style-config/tailwind'; /* GEL theme config (typography, spacing, etc.) */
+@import '@westpac/style-config/themes/wbc'; /* WBC brand colour tokens */
+
+@source "../node_modules/@westpac/ui/src"; /* let Tailwind see the class names GEL components use */
