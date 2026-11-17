@@ -7,7 +7,8 @@ This file only ever reads the CLEAN interactions file (tokens + keyword flags; t
 was already deleted by sanitize.py). It never sees raw data.
 
 Plain Python, no AI:
-    score_customer(token)        the INTERACTION ScoreMessage (rules below)
+    score_customer(token)        the INTERACTION ScoreMessage (rules below), with the "reached out" fact
+    reached_out(rows, as_of)     did the customer reach out first? (decides the Quiet Help message)
     customer_promises(token)     the promises the rules produce, with their ledger ID if published
     publish(token=None)          write SCORE + new PROMISE entries to the ledger (one customer, or everyone)
     RULES                        the rule table
@@ -22,6 +23,13 @@ Rules (exact definitions in mock_input_output/README.md), counted back from conf
     ABANDONED hardship form in the last 30 days    +15  ABANDONED_FORM
     capped at 100
 
+Reached out (not a score: it changes no points). The INTERACTION score also says whether the
+customer reached out first: a money-related contact in the last 30 days (REACHED_OUT_WINDOW_DAYS),
+meaning a HARDSHIP_FORM (any status, including ABANDONED), a CALLBACK_REQUEST, or any interaction
+flagged with a hardship keyword (JOB_LOSS, CANT_AFFORD). A GENERAL chat or a COMPLAINT without
+keywords doesn't count. Published as reached_out / reached_out_on / reached_out_via. Node D uses
+it to pick the Quiet Help message: the support OFFER if they reached out, a gentle TIP if not.
+
 Promises (fixed templates, never customer text):
     submitted HARDSHIP_FORM  ->  HARDSHIP_RESPONSE due 17:00 on the form date + 21 days, made by SYSTEM
     CALLBACK_REQUEST         ->  CALLBACK due at the requested callback time, made by the staff member
@@ -34,8 +42,8 @@ from typing import Any, Optional
 
 from nodes.ledger import store
 from nodes.ledger.store import LedgerError
-from shared.config import (CLEAN_INTERACTIONS_FILE, HARDSHIP_RESPONSE_DAYS, SYSTEM_ACTOR, band,
-                           clean_dir, now)
+from shared.config import (CLEAN_INTERACTIONS_FILE, HARDSHIP_RESPONSE_DAYS, REACHED_OUT_WINDOW_DAYS,
+                           SYSTEM_ACTOR, ReachedOutVia, band, clean_dir, now)
 from shared.pii_guard import KEYWORD_FLAGS, safe_tool
 from shared.schemas import CleanInteraction, CustomerToken, Promise, ScoreMessage
 
@@ -107,12 +115,49 @@ def score_interactions(rows: list[CleanInteraction], as_of: date) -> tuple[int, 
     return min(score, SCORE_CAP), reasons
 
 
+def _reached_out_via(row: CleanInteraction) -> Optional[str]:
+    """What makes this one interaction a money-related contact, or None if it isn't one."""
+    if row.type == "HARDSHIP_FORM":                          # any status, including ABANDONED
+        return ReachedOutVia.HARDSHIP_FORM.value
+    if row.type == "CALLBACK_REQUEST":
+        return ReachedOutVia.CALLBACK_REQUEST.value
+    if set(row.flags) & set(KEYWORD_FLAGS):                  # e.g. "lost my job" in a GENERAL chat
+        return ReachedOutVia.HARDSHIP_KEYWORDS.value
+    return None
+
+
+def reached_out(rows: list[CleanInteraction], as_of: date) -> dict[str, Any]:
+    """Did the customer reach out first? A money-related contact in the last REACHED_OUT_WINDOW_DAYS.
+
+    Returns {"reached_out": bool, "reached_out_on": date of the latest such contact or None,
+    "reached_out_via": what it was (HARDSHIP_FORM / CALLBACK_REQUEST / HARDSHIP_KEYWORDS) or None}.
+    No interactions at all, or only GENERAL chats / COMPLAINTs without keywords -> False.
+    Pure: changes no score."""
+    latest: Optional[tuple[date, str]] = None
+    for r in rows:
+        via = _reached_out_via(r)
+        if via and 0 <= (as_of - r.date).days <= REACHED_OUT_WINDOW_DAYS:
+            if latest is None or r.date >= latest[0]:        # the latest wins (a later row on the same day too)
+                latest = (r.date, via)
+    return {"reached_out": latest is not None, "reached_out_on": latest[0] if latest else None,
+            "reached_out_via": latest[1] if latest else None}
+
+
 def score_customer(customer_token: str, rows: Optional[list[CleanInteraction]] = None) -> ScoreMessage:
-    """The customer's INTERACTION score message, as of config.now()."""
+    """The customer's INTERACTION score message, as of config.now(), with the "reached out" fact."""
     at = now()
-    score, reasons = score_interactions(customer_interactions(customer_token, rows), at.date())
+    mine = customer_interactions(customer_token, rows)
+    score, reasons = score_interactions(mine, at.date())
     return ScoreMessage(customer_token=customer_token, source="INTERACTION", score=score,
-                        band=band(score).value, reasons=reasons, timestamp=at)
+                        band=band(score).value, reasons=reasons, timestamp=at, **reached_out(mine, at.date()))
+
+
+def customer_reached_out(customer_token: str, rows: Optional[list[CleanInteraction]] = None) -> dict[str, Any]:
+    """reached_out() for one customer from the clean data. A customer with no interactions at all
+    hasn't reached out (unlike score_customer, this doesn't raise)."""
+    rows = load_interactions() if rows is None else rows
+    mine = [r for r in rows if r.customer_token == customer_token]
+    return reached_out(mine, now().date())
 
 
 # ---------------------------------------------------------------------------
@@ -170,11 +215,15 @@ def _latest_interaction_score(customer_token: str) -> Optional[dict[str, Any]]:
     return scores[-1] if scores else None
 
 
+# What has to match for a new INTERACTION score to be "the same" as the latest one in the ledger.
+_SAME_SCORE_KEYS = ("score", "band", "reasons", "reached_out", "reached_out_on", "reached_out_via")
+
+
 def publish(customer_token: Optional[str] = None) -> dict[str, Any]:
     """Write SCORE and new PROMISE entries for one customer, or for everyone in the clean data.
 
     - A SCORE is skipped if the customer's latest INTERACTION score already says the same thing
-      (same score, band and reasons).
+      (same score, band and reasons, and the same "reached out" fact).
     - A PROMISE is skipped if the same promise (customer + type + due) is already in the ledger.
     - New promises get IDs from store.next_id("P"), in clean-file order.
     Returns a summary of what was written and skipped.
@@ -191,10 +240,11 @@ def publish(customer_token: Optional[str] = None) -> dict[str, Any]:
     for token in tokens:
         msg = score_customer(token, rows)
         latest = _latest_interaction_score(token)
-        if latest and (latest["score"], latest["band"], latest["reasons"]) == (msg.score, msg.band, msg.reasons):
+        new = msg.model_dump(mode="json")
+        if latest and all(latest.get(k) == new[k] for k in _SAME_SCORE_KEYS):
             summary["scores_skipped"].append(token)
             continue
-        store.append("SCORE", token, msg.model_dump(mode="json"))
+        store.append("SCORE", token, new)
         summary["scores_written"].append(token)
 
     # 2. Promises, in clean-file order (so IDs are handed out in date order).
@@ -214,7 +264,11 @@ def publish(customer_token: Optional[str] = None) -> dict[str, Any]:
 def rules() -> dict[str, Any]:
     """The B rule table and the keyword phrases behind HARDSHIP_KEYWORDS."""
     return {"rules": RULES, "cap": SCORE_CAP, "keyword_flags": KEYWORD_FLAGS,
-            "windows_days": {"forms_and_keywords": FORM_WINDOW_DAYS, "contacts": CONTACT_WINDOW_DAYS},
+            "windows_days": {"forms_and_keywords": FORM_WINDOW_DAYS, "contacts": CONTACT_WINDOW_DAYS,
+                             "reached_out": REACHED_OUT_WINDOW_DAYS},
+            "reached_out": "A hardship form (any status), a callback request, or hardship words in the last "
+                           f"{REACHED_OUT_WINDOW_DAYS} days. Changes no points; Node D uses it to choose the "
+                           "Quiet Help message (support offer if they reached out, a gentle tip if not).",
             "promises": [
                 {"when": "a hardship form is SUBMITTED", "promise_type": "HARDSHIP_RESPONSE",
                  "due": f"{HARDSHIP_RESPONSE_HOUR}:00 on the form date + {HARDSHIP_RESPONSE_DAYS} days"},
@@ -237,7 +291,10 @@ def register(mcp) -> None:
         """A customer's hardship score from their contacts with the bank (Node B), 0-100.
 
         Returns customer_token, source (INTERACTION), score, band (LOW / MODERATE / HIGH /
-        CRITICAL), reasons (rule codes such as HARDSHIP_FORM, REPEAT_CONTACT) and timestamp.
+        CRITICAL), reasons (rule codes such as HARDSHIP_FORM, REPEAT_CONTACT), timestamp, and
+        whether the customer reached out first: reached_out (a money-related contact in the last
+        30 days: hardship form, callback request or hardship words), reached_out_on (its date) and
+        reached_out_via (HARDSHIP_FORM, CALLBACK_REQUEST or HARDSHIP_KEYWORDS).
         """
         return score_customer(customer_token)
 

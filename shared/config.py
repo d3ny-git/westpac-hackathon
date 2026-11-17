@@ -90,6 +90,9 @@ P1_ALERT_WINDOW = timedelta(hours=24)          # P1: a promise due within this w
 QUIET_HELP_COOLDOWN = timedelta(days=30)       # Quiet Help: max one push per customer per 30 days
 RECOMMENDATION_COOLDOWN = timedelta(days=30)   # D won't repeat the same recommendation to a customer
                                                # within 30 days (e.g. after a person rejected it)
+REACHED_OUT_WINDOW_DAYS = 30                   # "reached out" = a money-related contact (hardship form,
+                                               # callback request, hardship keywords) in the last 30 days.
+                                               # Decides the Quiet Help message: support OFFER or gentle TIP
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +227,13 @@ class QuietHelpOption(str, Enum):
     PAUSE_REPAYMENTS = "PAUSE_REPAYMENTS"
     REDUCE_REPAYMENTS = "REDUCE_REPAYMENTS"
     BOOK_CALL = "BOOK_CALL"
+
+
+class ReachedOutVia(str, Enum):
+    """The kind of money-related contact that counts as reaching out (Node B)."""
+    HARDSHIP_FORM = "HARDSHIP_FORM"          # any status, including ABANDONED
+    CALLBACK_REQUEST = "CALLBACK_REQUEST"
+    HARDSHIP_KEYWORDS = "HARDSHIP_KEYWORDS"  # e.g. "lost my job", "can't afford" in a chat or call
 
 
 # ---------------------------------------------------------------------------
